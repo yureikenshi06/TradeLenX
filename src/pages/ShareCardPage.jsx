@@ -43,7 +43,7 @@ export default function ShareCardPage({ trades, stats }) {
       script.onload = async () => {
         const canvas = await window.html2canvas(el, { backgroundColor:th.bg, scale:2, logging:false, useCORS:true })
         const link = document.createElement('a')
-        link.download = `tradelens-${cardType}-${Date.now()}.png`
+        link.download = `tradelenx-${cardType}-${Date.now()}.png`
         link.href = canvas.toDataURL('image/png')
         link.click()
       }
@@ -226,7 +226,7 @@ export default function ShareCardPage({ trades, stats }) {
 
             {/* Logo */}
             <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:24 }}>
-              <div style={{ fontSize:13,fontWeight:700,color:th.accent,letterSpacing:0.5 }}>◈ TRADELENS</div>
+              <div style={{ fontSize:13,fontWeight:700,color:th.accent,letterSpacing:0.5 }}>◈ TRADELENX</div>
               <div style={{ fontSize:10,color:th.text,opacity:0.4 }}>{fmtDate(Date.now())}</div>
             </div>
 

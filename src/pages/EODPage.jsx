@@ -7,6 +7,93 @@ import { Card, SectionHead, Badge, Btn, ChartTooltip } from '../components/UI'
 const MOODS     = ['🔥 Sharp','😐 Okay','😰 Anxious','😤 FOMO','🧘 Disciplined','😴 Tired','😡 Revenge']
 const LESSONS   = ['Followed plan','Overtraded','Chased entries','Cut winners too early','Let losers run','Good risk management','Poor position sizing','Emotional trading']
 
+const DEFAULT_DAY_GOALS = {
+  targetPnL:     200,
+  maxLoss:       100,
+  maxTrades:     10,
+  minWinRate:    50,
+}
+
+function DayGoalsTracker({ dayTrades, dayPnL, dayFees }) {
+  const [goals, setGoals] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('tlx_day_goals') || '{}') } catch { return {} }
+  })
+  const [editing, setEditing] = useState(false)
+  const [form, setForm] = useState({ ...DEFAULT_DAY_GOALS, ...goals })
+  const g = { ...DEFAULT_DAY_GOALS, ...goals }
+
+  const save = () => { localStorage.setItem('tlx_day_goals', JSON.stringify(form)); setGoals(form); setEditing(false) }
+
+  const dayWins   = dayTrades.filter(t=>t.pnl>0).length
+  const winRate   = dayTrades.length ? dayWins/dayTrades.length*100 : 0
+
+  const items = [
+    { label:'Daily P&L Target',  current:dayPnL,              target:g.targetPnL,  unit:'$', good:dayPnL>=g.targetPnL,            fmt:v=>(v>=0?'+$':'-$')+fmt(Math.abs(v)) },
+    { label:'Max Loss Limit',    current:Math.abs(Math.min(0,dayPnL)), target:g.maxLoss, unit:'$', good:dayPnL>=-g.maxLoss, invert:true, fmt:v=>'$'+fmt(v) },
+    { label:'Max Trades',        current:dayTrades.length,    target:g.maxTrades,  unit:'', good:dayTrades.length<=g.maxTrades,  invert:true, fmt:v=>v+' trades' },
+    { label:'Win Rate Goal',     current:winRate,             target:g.minWinRate, unit:'%', good:winRate>=g.minWinRate,           fmt:v=>fmt(v)+'%' },
+  ]
+
+  return (
+    <Card glow>
+      <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14 }}>
+        <SectionHead title="Daily Goals Tracker" sub="Today's Targets"/>
+        <button onClick={()=>setEditing(e=>!e)} style={{ background:'none',border:`1px solid ${T.border}`,borderRadius:6,padding:'4px 12px',cursor:'pointer',fontFamily:T.fontSans,fontSize:11,color:T.muted }}>
+          {editing?'Cancel':'⚙ Edit Goals'}
+        </button>
+      </div>
+
+      {editing ? (
+        <div>
+          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:12 }}>
+            {[
+              {key:'targetPnL',  label:'Daily P&L Target ($)'},
+              {key:'maxLoss',    label:'Max Loss Allowed ($)'},
+              {key:'maxTrades',  label:'Max Trades per Day'},
+              {key:'minWinRate', label:'Min Win Rate (%)'},
+            ].map(f=>(
+              <div key={f.key}>
+                <div style={{ fontSize:10,color:T.muted,letterSpacing:1,textTransform:'uppercase',marginBottom:4 }}>{f.label}</div>
+                <input type="number" value={form[f.key]} onChange={e=>setForm(x=>({...x,[f.key]:+e.target.value}))}
+                  style={{ width:'100%',background:T.surface,border:`1px solid ${T.border}`,borderRadius:7,padding:'7px 10px',color:T.text,fontFamily:T.fontMono,fontSize:13,outline:'none' }}/>
+              </div>
+            ))}
+          </div>
+          <button onClick={save} style={{ background:T.accent,color:'#000',border:'none',borderRadius:7,padding:'8px 20px',cursor:'pointer',fontFamily:T.fontSans,fontWeight:600,fontSize:12 }}>Save Goals</button>
+        </div>
+      ) : (
+        <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+          {items.map(item => {
+            const pct = item.invert
+              ? Math.max(0, Math.min(100, (1 - item.current/item.target)*100))
+              : Math.max(0, Math.min(100, item.current/item.target*100))
+            const c = item.good ? T.green : pct > 60 ? T.accent : T.red
+            return (
+              <div key={item.label}>
+                <div style={{ display:'flex',justifyContent:'space-between',marginBottom:4 }}>
+                  <span style={{ fontSize:12,color:T.textMid,fontWeight:500 }}>{item.label}</span>
+                  <span style={{ fontSize:12,fontFamily:T.fontMono }}>
+                    <span style={{ color:c,fontWeight:700 }}>{item.fmt(item.current)}</span>
+                    <span style={{ color:T.muted }}> / {item.fmt(item.target)}</span>
+                  </span>
+                </div>
+                <div style={{ height:6,background:T.surface,borderRadius:3,overflow:'hidden',border:`1px solid ${T.border}` }}>
+                  <div style={{ width:pct+'%',height:'100%',background:c,borderRadius:3,transition:'width 0.5s ease' }}/>
+                </div>
+                <div style={{ fontSize:9,color:item.good?T.green:T.muted,textAlign:'right',marginTop:2 }}>
+                  {item.good ? '✓ Goal met' : fmt(pct,0)+'% of target'}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+
+
 function useEOD() {
   const [entries, setEntries] = useState(() => { try { return JSON.parse(localStorage.getItem('tl_eod')||'[]') } catch { return [] } })
   const save = (entry) => {
@@ -131,6 +218,7 @@ export default function EODPage({ trades, stats }) {
 
         {/* Right — EOD Journal */}
         <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
+          <DayGoalsTracker dayTrades={dayTrades} dayPnL={dayPnL} dayFees={dayFees}/>
           <Card glow>
             <SectionHead title="End of Day Review" sub="Daily Journal"/>
 

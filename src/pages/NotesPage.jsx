@@ -164,11 +164,11 @@ export default function NotesPage({ trades }) {
   // Fallback: local storage for demo
   useEffect(() => {
     if (user) return
-    const saved = localStorage.getItem('tradelens_notes')
+    const saved = localStorage.getItem('tradelenx_notes')
     if (saved) setNotes(JSON.parse(saved))
   }, [])
 
-  const saveLocal = (notes) => localStorage.setItem('tradelens_notes', JSON.stringify(notes))
+  const saveLocal = (notes) => localStorage.setItem('tradelenx_notes', JSON.stringify(notes))
 
   const handleSave = async (form) => {
     const payload = {

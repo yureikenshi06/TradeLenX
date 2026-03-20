@@ -15,39 +15,51 @@ import ProgressPage  from './pages/ProgressPage'
 import EODPage       from './pages/EODPage'
 import ChecklistPage from './pages/ChecklistPage'
 import ShareCardPage from './pages/ShareCardPage'
+import WalletPage    from './pages/WalletPage'
 import { THEME as T } from './lib/theme'
 import { Spinner } from './components/UI'
 
 function AppInner() {
   const { user, loading: authLoading } = useAuth()
-  const { trades, allTrades, stats, loading, connected, source, error, progress, dateRange, loadDemo, connectBinance, applyDateRange } = useTrades()
+  const {
+    trades, allTrades, stats, loading, connected, source,
+    error, progress, dateRange, savedKeys,
+    loadDemo, connectBinance, applyDateRange, disconnectBinance,
+  } = useTrades()
   const [page, setPage] = useState('dashboard')
 
-  if (authLoading) {
-    return (
-      <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:T.bgDeep,flexDirection:'column',gap:16 }}>
-        <div style={{ fontSize:32,color:T.accent }}>◈</div>
-        <Spinner size={32}/>
-        <div style={{ fontSize:12,color:T.muted,fontFamily:T.fontMono }}>Loading TradeLens...</div>
-      </div>
-    )
-  }
+  if (authLoading) return (
+    <div style={{ minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:T.bgDeep,flexDirection:'column',gap:16 }}>
+      <div style={{ fontSize:32,color:T.accent }}>◈</div>
+      <Spinner size={32}/>
+      <div style={{ fontSize:12,color:T.muted,fontFamily:T.fontMono }}>Loading Tradelenx...</div>
+    </div>
+  )
+
   if (!user) return <LoginPage />
 
   const shared = { trades, stats }
   const pages = {
-    dashboard: <DashboardPage {...shared} applyDateRange={applyDateRange} dateRange={dateRange} allTrades={allTrades} />,
-    trades:    <TradesPage    {...shared} />,
-    charts:    <AnalyticsPage {...shared} />,
-    calendar:  <CalendarPage  {...shared} />,
-    symbols:   <SymbolsPage   {...shared} />,
-    notes:     <NotesPage     {...shared} />,
-    ai:        <AIPage        {...shared} />,
-    progress:  <ProgressPage  {...shared} />,
-    eod:       <EODPage       {...shared} />,
-    checklist: <ChecklistPage />,
-    share:     <ShareCardPage {...shared} />,
-    settings:  <SettingsPage  {...shared} source={source} error={error} progress={progress} onConnectBinance={connectBinance} onLoadDemo={loadDemo} />,
+    dashboard: <DashboardPage {...shared} applyDateRange={applyDateRange} dateRange={dateRange} allTrades={allTrades}/>,
+    trades:    <TradesPage    {...shared}/>,
+    charts:    <AnalyticsPage {...shared}/>,
+    calendar:  <CalendarPage  {...shared}/>,
+    symbols:   <SymbolsPage   {...shared}/>,
+    wallet:    <WalletPage/>,
+    notes:     <NotesPage     {...shared}/>,
+    ai:        <AIPage        {...shared}/>,
+    progress:  <ProgressPage  {...shared}/>,
+    eod:       <EODPage       {...shared}/>,
+    checklist: <ChecklistPage/>,
+    share:     <ShareCardPage {...shared}/>,
+    settings:  <SettingsPage
+                 {...shared}
+                 source={source} error={error} progress={progress}
+                 savedKeys={savedKeys}
+                 onConnectBinance={connectBinance}
+                 onLoadDemo={loadDemo}
+                 onDisconnect={disconnectBinance}
+               />,
   }
 
   return (
@@ -63,5 +75,5 @@ function AppInner() {
 }
 
 export default function App() {
-  return <AuthProvider><AppInner /></AuthProvider>
+  return <AuthProvider><AppInner/></AuthProvider>
 }

@@ -4,8 +4,9 @@ import { fmt, fmtDate } from '../lib/data'
 import { Card, SectionHead, Btn, Input } from '../components/UI'
 import { useAuth } from '../hooks/useAuth'
 import { signOut } from '../lib/supabase'
+import { loadKeys, clearKeys } from '../hooks/useTrades'
 
-export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDemo, source, error: hookError, progress }) {
+export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDemo, onDisconnect, source, error: hookError, progress, savedKeys }) {
   const { user }    = useAuth()
   const [apiKey,    setApiKey]    = useState('')
   const [apiSecret, setApiSecret] = useState('')
@@ -35,7 +36,7 @@ export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDe
     ].join('\n')
     const a = document.createElement('a')
     a.href = 'data:text/csv,' + encodeURIComponent(rows)
-    a.download = `tradelens_export_${Date.now()}.csv`
+    a.download = `tradelenx_export_${Date.now()}.csv`
     a.click()
   }
 
@@ -160,12 +161,20 @@ export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDe
           </div>
         )}
 
-        {/* Important note */}
-        <div style={{ padding: '12px 14px', background: T.surface, borderRadius: 10, fontSize: 11, color: T.muted, lineHeight: 1.8, borderLeft: `3px solid ${T.accent}` }}>
-          <div style={{ fontWeight: 700, color: T.textMid, marginBottom: 6 }}>⚠ Important for local testing</div>
-          <div>Run <code style={{ background: T.bg, padding: '1px 6px', borderRadius: 4, color: T.accent }}>netlify dev</code> instead of <code style={{ background: T.bg, padding: '1px 6px', borderRadius: 4, color: T.red }}>npm run dev</code></div>
-          <div>Since you trade Perpetual Futures, make sure your Binance API key has "Enable Futures" turned ON. Go to Binance → API Management → Edit key → check Enable Futures.</div>
-          <div style={{ marginTop: 6 }}>For production: add <code style={{ color: T.accent }}>BINANCE_API_KEY</code> + <code style={{ color: T.accent }}>BINANCE_API_SECRET</code> to Netlify env vars.</div>
+        {/* Auto-save status */}
+        {savedKeys && (
+          <div style={{ padding:'10px 14px',background:T.greenDim,border:`1px solid ${T.green}33`,borderRadius:8,marginBottom:8,display:'flex',justifyContent:'space-between',alignItems:'center' }}>
+            <div style={{ fontSize:12,color:T.green }}>✓ API keys saved for this session — auto-connects on next visit</div>
+            <button onClick={()=>{ if(onDisconnect) onDisconnect() }} style={{ background:'none',border:`1px solid ${T.red}44`,color:T.red,borderRadius:5,padding:'3px 10px',cursor:'pointer',fontFamily:T.fontSans,fontSize:11 }}>
+              Forget Keys
+            </button>
+          </div>
+        )}
+        <div style={{ padding: '12px 14px', background: T.surface, borderRadius: 10, fontSize: 11, color: T.muted, lineHeight: 1.8, borderLeft: `3px solid ${T.green}` }}>
+          <div style={{ fontWeight: 700, color: T.green, marginBottom: 6 }}>✓ Direct connection — works on Netlify</div>
+          <div>Your browser signs requests directly. Secret key never leaves your device.</div>
+          <div style={{ marginTop:4 }}>Keys are saved in <strong style={{ color:T.textMid }}>sessionStorage</strong> — auto-loads when you return to the tab. Cleared when browser closes.</div>
+          <div style={{ marginTop:4,color:T.accent }}>Make sure your Binance API key has <strong>Enable Futures</strong> turned ON and IP restriction set to <strong>Unrestricted</strong>.</div>
         </div>
       </Card>
 

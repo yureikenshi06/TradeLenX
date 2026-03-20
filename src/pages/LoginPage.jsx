@@ -45,7 +45,7 @@ export default function LoginPage() {
             TRADE<span style={{ color: T.muted }}>LENS</span>
           </div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 6, letterSpacing: 2 }}>
-            YOUR PRIVATE TRADING JOURNAL
+            YOUR PRIVATE FUTURES JOURNAL
           </div>
         </div>
 

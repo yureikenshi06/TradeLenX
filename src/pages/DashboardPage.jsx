@@ -1,11 +1,11 @@
 import { useState, useMemo } from 'react'
 import {
-  AreaChart, Area, BarChart, Bar, ComposedChart, LineChart, Line,
+  AreaChart, Area, BarChart, Bar, LineChart, Line,
   PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis,
   XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer, Legend,
 } from 'recharts'
 import { THEME as T, colorPnL } from '../lib/theme'
-import { fmt, fmtDate, fmtPct, loadCashFlow, saveCashFlow, localDateKey } from '../lib/data'
+import { fmt, fmtDate, fmtPct, localDateKey } from '../lib/data'
 import { KpiCard, Card, SectionHead, Badge, ProgressBar, ChartTooltip, Select, Btn, Input } from '../components/UI'
 
 const PERIOD_OPTIONS = [
@@ -15,127 +15,16 @@ const PERIOD_OPTIONS = [
   { value:'yearly',    label:'Yearly'    },
 ]
 
-// Cash Flow Manager Modal
-function CashFlowModal({ onClose }) {
-  const [entries, setEntries] = useState(loadCashFlow)
-  const [form, setForm] = useState({ type:'deposit', amount:'', date:localDateKey(Date.now()), note:'' })
-  const [saved, setSaved] = useState(false)
-
-  const add = () => {
-    if (!form.amount || isNaN(+form.amount) || +form.amount <= 0) return
-    const entry = { ...form, amount:+form.amount, time: new Date(form.date+'T12:00:00').getTime(), id: Date.now() }
-    const updated = [...entries, entry].sort((a,b)=>a.time-b.time)
-    saveCashFlow(updated); setEntries(updated)
-    setForm(f=>({...f, amount:'', note:''})); setSaved(true)
-    setTimeout(()=>setSaved(false), 2000)
-  }
-  const remove = (id) => { const u = entries.filter(e=>e.id!==id); saveCashFlow(u); setEntries(u) }
-
-  const totalIn  = entries.filter(e=>e.type==='deposit').reduce((s,e)=>s+e.amount,0)
-  const totalOut = entries.filter(e=>e.type==='withdraw').reduce((s,e)=>s+e.amount,0)
-
-  return (
-    <div style={{ position:'fixed',inset:0,zIndex:200,background:'rgba(0,0,0,0.8)',display:'flex',alignItems:'center',justifyContent:'center' }}>
-      <div style={{ background:T.card,border:`1px solid ${T.borderMid}`,borderRadius:14,padding:28,width:560,maxHeight:'85vh',overflow:'auto',boxShadow:'0 24px 80px rgba(0,0,0,0.7)' }}>
-        <div style={{ display:'flex',justifyContent:'space-between',marginBottom:20 }}>
-          <div style={{ fontSize:17,fontWeight:700 }}>Capital Flow Manager</div>
-          <button onClick={onClose} style={{ background:'none',border:'none',color:T.muted,cursor:'pointer',fontSize:18 }}>✕</button>
-        </div>
-        {/* Summary */}
-        <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8,marginBottom:18 }}>
-          {[
-            { l:'Total Deposited',  v:'+$'+fmt(totalIn),  c:T.green },
-            { l:'Total Withdrawn',  v:'-$'+fmt(totalOut), c:T.red   },
-            { l:'Net Capital',      v:(totalIn-totalOut>=0?'+$':'-$')+fmt(Math.abs(totalIn-totalOut)), c:colorPnL(totalIn-totalOut) },
-          ].map(r=>(
-            <div key={r.l} style={{ background:T.surface,borderRadius:8,padding:'10px 12px',border:`1px solid ${T.border}` }}>
-              <div style={{ fontSize:9,color:T.muted,letterSpacing:1,textTransform:'uppercase',marginBottom:3 }}>{r.l}</div>
-              <div style={{ fontSize:16,fontWeight:700,color:r.c,fontFamily:T.fontMono }}>{r.v}</div>
-            </div>
-          ))}
-        </div>
-        {/* Add form */}
-        <div style={{ background:T.surface,borderRadius:10,padding:16,marginBottom:16,border:`1px solid ${T.border}` }}>
-          <div style={{ fontSize:12,fontWeight:600,marginBottom:12 }}>Add Transaction</div>
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10 }}>
-            <div>
-              <div style={{ fontSize:10,color:T.muted,letterSpacing:1,textTransform:'uppercase',marginBottom:5 }}>Type</div>
-              <div style={{ display:'flex',gap:6 }}>
-                {['deposit','withdraw'].map(t=>(
-                  <button key={t} onClick={()=>setForm(f=>({...f,type:t}))} style={{
-                    flex:1,padding:'7px',borderRadius:6,cursor:'pointer',fontFamily:T.fontSans,fontSize:12,fontWeight:form.type===t?600:400,
-                    background:form.type===t?(t==='deposit'?T.greenDim:T.redDim):T.card,
-                    border:`1px solid ${form.type===t?(t==='deposit'?T.green:T.red):T.border}`,
-                    color:form.type===t?(t==='deposit'?T.green:T.red):T.muted,
-                  }}>{t==='deposit'?'↓ Deposit':'↑ Withdraw'}</button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize:10,color:T.muted,letterSpacing:1,textTransform:'uppercase',marginBottom:5 }}>Amount (USDT)</div>
-              <Input value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))} placeholder="e.g. 1000" type="number"/>
-            </div>
-            <div>
-              <div style={{ fontSize:10,color:T.muted,letterSpacing:1,textTransform:'uppercase',marginBottom:5 }}>Date</div>
-              <Input type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
-            </div>
-            <div>
-              <div style={{ fontSize:10,color:T.muted,letterSpacing:1,textTransform:'uppercase',marginBottom:5 }}>Note (optional)</div>
-              <Input value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))} placeholder="e.g. Initial deposit"/>
-            </div>
-          </div>
-          <Btn variant="accent" onClick={add} style={{ width:'100%',padding:'9px' }}>{saved?'✓ Saved!':'Add Transaction'}</Btn>
-        </div>
-        {/* List */}
-        <div style={{ display:'flex',flexDirection:'column',gap:6 }}>
-          {entries.sort((a,b)=>b.time-a.time).map(e=>(
-            <div key={e.id} style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 12px',background:T.surface,borderRadius:8,border:`1px solid ${e.type==='deposit'?T.green:T.red}22` }}>
-              <div>
-                <div style={{ fontSize:12,fontWeight:500 }}>{e.note||e.type}</div>
-                <div style={{ fontSize:10,color:T.muted }}>{fmtDate(e.time)}</div>
-              </div>
-              <div style={{ display:'flex',alignItems:'center',gap:10 }}>
-                <div style={{ fontSize:13,fontWeight:700,color:e.type==='deposit'?T.green:T.red,fontFamily:T.fontMono }}>
-                  {e.type==='deposit'?'+':'-'}${fmt(e.amount)}
-                </div>
-                <button onClick={()=>remove(e.id)} style={{ background:'none',border:'none',color:T.muted,cursor:'pointer',fontSize:13,padding:'2px 6px' }}>✕</button>
-              </div>
-            </div>
-          ))}
-          {!entries.length && <div style={{ color:T.muted,fontSize:12,textAlign:'center',padding:'20px 0' }}>No transactions yet</div>}
-        </div>
-      </div>
-    </div>
-  )
-}
 
 export default function DashboardPage({ trades, stats, applyDateRange, dateRange, allTrades }) {
   const [period, setPeriod]   = useState('monthly')
-  const [showCF, setShowCF]   = useState(false)
   const [startDate, setStart] = useState('')
   const [endDate,   setEnd]   = useState('')
 
-  const cashFlow = useMemo(() => loadCashFlow(), [showCF])
-
   if (!trades?.length) return <div style={{ padding:32,color:T.muted }}>No trade data loaded.</div>
 
-  const totalDeposits    = cashFlow.filter(c=>c.type==='deposit').reduce((s,c)=>s+c.amount,0)
-  const totalWithdrawals = cashFlow.filter(c=>c.type==='withdraw').reduce((s,c)=>s+c.amount,0)
-
   // Asset value curve = trades equity + overlay cash flow events
-  const assetValueData = useMemo(() => {
-    const cf = loadCashFlow()
-    let runningCapital = totalDeposits - totalWithdrawals || 10000
-    // Merge trade equity points with deposit/withdrawal markers
-    const points = stats.equityCurve?.map(p => ({ ...p, type:'trade' })) || []
-    cf.forEach(c => {
-      points.push({ time:c.time, cashEvent:c.type==='deposit'?c.amount:-c.amount, type:c.type, note:c.note })
-    })
-    points.sort((a,b)=>a.time-b.time)
-    return points
-  }, [stats.equityCurve, showCF, totalDeposits, totalWithdrawals])
-
-  const periodData = period==='weekly'    ? stats.weeklyArr?.map(d=>({label:d.label||d.w, ...d}))
+const periodData = period==='weekly'    ? stats.weeklyArr?.map(d=>({label:d.label||d.w, ...d}))
     : period==='monthly'   ? stats.monthlyArr?.map(d=>({label:d.label||d.m, ...d}))
     : period==='quarterly' ? stats.quarterlyArr?.map(d=>({label:d.label||d.q, ...d}))
     : stats.yearlyArr?.map(d=>({label:d.label||d.y, ...d}))
@@ -157,7 +46,6 @@ export default function DashboardPage({ trades, stats, applyDateRange, dateRange
 
   return (
     <div style={{ padding:'24px 28px',fontFamily:T.fontSans }}>
-      {showCF && <CashFlowModal onClose={()=>setShowCF(false)}/>}
 
       {/* Header */}
       <div style={{ marginBottom:18,paddingBottom:14,borderBottom:`1px solid ${T.border}` }}>
@@ -176,7 +64,6 @@ export default function DashboardPage({ trades, stats, applyDateRange, dateRange
               style={{ background:T.card,border:`1px solid ${T.border}`,borderRadius:6,padding:'5px 9px',color:T.text,fontFamily:T.fontSans,fontSize:11,outline:'none' }}/>
             <Btn onClick={applyRange} variant="accent" style={{ padding:'5px 12px',fontSize:11 }}>Apply</Btn>
             {dateRange && <Btn onClick={clearRange} style={{ padding:'5px 12px',fontSize:11 }}>✕ Clear</Btn>}
-            <Btn onClick={()=>setShowCF(true)} style={{ padding:'5px 12px',fontSize:11 }}>💰 Capital Flow</Btn>
           </div>
         </div>
         {dateRange && <div style={{ marginTop:6,fontSize:11,color:T.accent }}>Filtered: {fmtDate(dateRange.start)} – {fmtDate(dateRange.end)} · {trades.length} trades</div>}
@@ -210,43 +97,6 @@ export default function DashboardPage({ trades, stats, applyDateRange, dateRange
         <div style={{ fontSize:12,fontFamily:T.fontMono,fontWeight:700 }}><span style={{ color:T.muted }}>Net: </span><span style={{ color:colorPnL(stats.netPnL) }}>{stats.netPnL>=0?'+$':'-$'}{fmt(Math.abs(stats.netPnL||0))}</span></div>
         <div style={{ marginLeft:'auto',fontSize:11,color:T.muted }}>Check: {Math.abs((stats.grossPnL||0)-(stats.totalFees||0)-(stats.netPnL||0))<0.01?'✓ Balanced':'⚠ Rounding diff'}</div>
       </div>
-
-      {/* Asset Value Curve (equity + deposits/withdrawals) */}
-      <Card style={{ marginBottom:12 }} glow>
-        <SectionHead title="Asset Value Curve" sub="Account Balance incl. Deposits & Withdrawals"
-          action={<Btn onClick={()=>setShowCF(true)} style={{ fontSize:11,padding:'4px 10px' }}>+ Edit Capital Flow</Btn>}/>
-        <ResponsiveContainer width="100%" height={220}>
-          <ComposedChart data={assetValueData.filter(p=>p.equity)} margin={{ left:8,right:8,top:4,bottom:4 }}>
-            <defs>
-              <linearGradient id="avGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={T.accent} stopOpacity={0.2}/>
-                <stop offset="100%" stopColor={T.accent} stopOpacity={0.02}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false}/>
-            <XAxis dataKey="i" tick={{ fill:T.muted,fontSize:10 }} tickLine={false} axisLine={{ stroke:T.border }}/>
-            <YAxis tick={{ fill:T.muted,fontSize:10,fontFamily:T.fontMono }} tickLine={false} axisLine={false} tickFormatter={v=>'$'+fmt(v,0)} width={72}/>
-            <Tooltip content={<ChartTooltip formatter={v=>'$'+fmt(v)}/>}/>
-            <Area type="monotone" dataKey="equity" stroke={T.accent} fill="url(#avGrad)" strokeWidth={2} dot={false} name="Balance"/>
-            {/* Deposit/withdrawal reference lines */}
-            {cashFlow.filter(c=>c.time>=stats.firstDate).map((c,i)=>(
-              <ReferenceLine key={i} x={stats.equityCurve?.findIndex(p=>p.time>=c.time)}
-                stroke={c.type==='deposit'?T.green:T.red} strokeDasharray="3 3" strokeWidth={1.5}
-                label={{ value:(c.type==='deposit'?'↓':'+')+'$'+fmt(c.amount,0), fill:c.type==='deposit'?T.green:T.red, fontSize:9, position:'top' }}/>
-            ))}
-          </ComposedChart>
-        </ResponsiveContainer>
-        {cashFlow.length > 0 && (
-          <div style={{ display:'flex',gap:12,marginTop:8,flexWrap:'wrap' }}>
-            {cashFlow.sort((a,b)=>b.time-a.time).slice(0,4).map((c,i)=>(
-              <div key={i} style={{ display:'flex',alignItems:'center',gap:5,fontSize:10,color:T.muted }}>
-                <div style={{ width:8,height:8,borderRadius:'50%',background:c.type==='deposit'?T.green:T.red }}/>
-                {c.note||c.type}: {c.type==='deposit'?'+':'-'}${fmt(c.amount)} · {fmtDate(c.time)}
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
 
       {/* Cumulative PnL + Drawdown side by side */}
       <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12 }}>
