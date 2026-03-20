@@ -17,7 +17,7 @@ export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDe
     setMsg('')
     setSaving(true)
     const res = await onConnectBinance(apiKey, apiSecret)
-    if (res?.success)  setMsg(`✓ Connected! Loaded ${res.count} trades from Binance.`)
+    if (res?.success)  setMsg(`✓ Loaded ${res.count} futures trades across ${res.symbols} symbols!`)
     else if (res?.demo) setMsg('⚠ Showing demo data — see error above.')
     else if (res?.error) setMsg('')
     setSaving(false)
@@ -164,7 +164,7 @@ export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDe
         <div style={{ padding: '12px 14px', background: T.surface, borderRadius: 10, fontSize: 11, color: T.muted, lineHeight: 1.8, borderLeft: `3px solid ${T.accent}` }}>
           <div style={{ fontWeight: 700, color: T.textMid, marginBottom: 6 }}>⚠ Important for local testing</div>
           <div>Run <code style={{ background: T.bg, padding: '1px 6px', borderRadius: 4, color: T.accent }}>netlify dev</code> instead of <code style={{ background: T.bg, padding: '1px 6px', borderRadius: 4, color: T.red }}>npm run dev</code></div>
-          <div>The Binance function requires the Netlify serverless runtime to sign requests with HMAC-SHA256.</div>
+          <div>Since you trade Perpetual Futures, make sure your Binance API key has "Enable Futures" turned ON. Go to Binance → API Management → Edit key → check Enable Futures.</div>
           <div style={{ marginTop: 6 }}>For production: add <code style={{ color: T.accent }}>BINANCE_API_KEY</code> + <code style={{ color: T.accent }}>BINANCE_API_SECRET</code> to Netlify env vars.</div>
         </div>
       </Card>
