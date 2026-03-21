@@ -4,6 +4,7 @@ import { THEME as T, colorPnL } from '../lib/theme'
 import { fmt, fmtDate, fmtTime, localDateKey, loadCashFlow, saveCashFlow } from '../lib/data'
 import { Card, SectionHead, KpiCard, Badge, Btn, Input, ChartTooltip } from '../components/UI'
 import { fetchLiveAccount, loadKeys } from '../hooks/useTrades'
+import { fetchCapitalFlow, upsertCapitalFlow, deleteCapitalFlow, supabase } from '../lib/supabase'
 
 function useLiveData() {
   const [account,  setAccount]  = useState(null)
@@ -34,19 +35,50 @@ function useLiveData() {
 }
 
 function CashFlowPanel() {
-  const [entries, setEntries] = useState(loadCashFlow)
+  const [entries, setEntries] = useState([])
+  const [userId,  setUserId]  = useState(null)
+  const [syncing, setSyncing] = useState(false)
+
+  // Load from Supabase on mount, fallback to localStorage
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      const uid = data?.user?.id
+      setUserId(uid)
+      if (uid) {
+        fetchCapitalFlow(uid).then(rows => {
+          if (rows.length) {
+            setEntries(rows.map(r => ({ ...r, amount:+r.amount })))
+          } else {
+            // Migrate from localStorage if any
+            const local = loadCashFlow()
+            if (local.length) {
+              setEntries(local)
+              local.forEach(e => upsertCapitalFlow(e, uid).catch(()=>{}))
+            }
+          }
+        }).catch(() => setEntries(loadCashFlow()))
+      } else {
+        setEntries(loadCashFlow())
+      }
+    })
+  }, [])
   const [form, setForm] = useState({ type:'deposit', amount:'', date:localDateKey(Date.now()), note:'' })
   const [msg,  setMsg]  = useState('')
 
-  const add = () => {
+  const add = async () => {
     if (!form.amount || +form.amount <= 0) return
-    const entry = { ...form, amount:+form.amount, time:new Date(form.date+'T12:00:00').getTime(), id:Date.now() }
+    const entry = { ...form, amount:+form.amount, time:new Date(form.date+'T12:00:00').getTime(), id:String(Date.now()) }
     const updated = [...entries, entry].sort((a,b)=>a.time-b.time)
-    saveCashFlow(updated); setEntries(updated)
+    setEntries(updated); saveCashFlow(updated)
     setForm(f=>({...f, amount:'', note:''}))
-    setMsg('Saved!'); setTimeout(()=>setMsg(''), 2000)
+    setMsg('Saved!'); setTimeout(()=>setMsg(''), 2500)
+    if (userId) { try { await upsertCapitalFlow(entry, userId) } catch {} }
   }
-  const remove = (id) => { const u=entries.filter(e=>e.id!==id); saveCashFlow(u); setEntries(u) }
+  const remove = async (id) => {
+    const u = entries.filter(e=>e.id!==id)
+    setEntries(u); saveCashFlow(u)
+    if (userId) { try { await deleteCapitalFlow(id) } catch {} }
+  }
 
   const totalIn  = entries.filter(e=>e.type==='deposit').reduce((s,e)=>s+e.amount,0)
   const totalOut = entries.filter(e=>e.type==='withdraw').reduce((s,e)=>s+e.amount,0)

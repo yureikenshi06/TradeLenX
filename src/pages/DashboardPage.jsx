@@ -29,13 +29,14 @@ const periodData = period==='weekly'    ? stats.weeklyArr?.map(d=>({label:d.labe
     : period==='quarterly' ? stats.quarterlyArr?.map(d=>({label:d.label||d.q, ...d}))
     : stats.yearlyArr?.map(d=>({label:d.label||d.y, ...d}))
 
+  // Radar: each axis 0–100, represents a meaningful trading quality
   const radarData = [
-    { metric:'Win Rate',    val:Math.min(100,stats.winRate) },
-    { metric:'R:R',         val:Math.min(100,parseFloat(stats.rr)*20) },
-    { metric:'Consistency', val:Math.min(100,(stats.profitFactor||0)*20) },
-    { metric:'Risk Ctrl',   val:Math.max(0,100-stats.maxDD*2) },
-    { metric:'Volume',      val:Math.min(100,stats.total/2) },
-    { metric:'Diversity',   val:Math.min(100,(stats.symbolArr?.length||0)*8) },
+    { metric:'Win Rate',     val: Math.min(100, stats.winRate) },
+    { metric:'Risk/Reward',  val: Math.min(100, parseFloat(stats.rr||0) / 3 * 100) },
+    { metric:'Consistency',  val: Math.min(100, isFinite(stats.profitFactor) ? Math.min(stats.profitFactor, 3) / 3 * 100 : 100) },
+    { metric:'DD Control',   val: Math.max(0, 100 - stats.maxDD * 3) },
+    { metric:'Avg Win Size', val: Math.min(100, stats.avgWin > 0 && stats.avgLoss > 0 ? Math.min(stats.avgWin/stats.avgLoss, 3)/3*100 : 50) },
+    { metric:'Discipline',   val: Math.max(0, 100 - (stats.maxLossStreak||0) * 8) },
   ]
 
   const applyRange = () => {
@@ -45,7 +46,7 @@ const periodData = period==='weekly'    ? stats.weeklyArr?.map(d=>({label:d.labe
   const clearRange = () => { setStart(''); setEnd(''); applyDateRange && applyDateRange(null,null) }
 
   return (
-    <div style={{ padding:'24px 28px',fontFamily:T.fontSans }}>
+    <div className="page-enter" style={{ padding:'24px 28px',fontFamily:T.fontSans }}>
 
       {/* Header */}
       <div style={{ marginBottom:18,paddingBottom:14,borderBottom:`1px solid ${T.border}` }}>
@@ -74,8 +75,8 @@ const periodData = period==='weekly'    ? stats.weeklyArr?.map(d=>({label:d.labe
         <KpiCard label="Net P&L"       value={(stats.netPnL>=0?'+$':'-$')+fmt(Math.abs(stats.netPnL||0))} color={colorPnL(stats.netPnL||0)} sub="Gross minus fees"/>
         <KpiCard label="Gross P&L"     value={(stats.grossPnL>=0?'+$':'-$')+fmt(Math.abs(stats.grossPnL||0))} color={colorPnL(stats.grossPnL||0)} sub="Before deducting fees"/>
         <KpiCard label="Total Fees"    value={'-$'+fmt(stats.totalFees)} color={T.red} sub="= Gross − Net"/>
-        <KpiCard label="Win Rate"      value={fmt(stats.winRate)+'%'} color={stats.winRate>=50?T.green:T.red} sub={`${stats.winners}W / ${stats.losers}L`}/>
-        <KpiCard label="Max Drawdown"  value={fmt(stats.maxDD)+'%'} color={stats.maxDD<10?T.green:stats.maxDD<25?T.accent:T.red} sub="Peak-to-trough"/>
+        <KpiCard label="Win Rate"      value={fmt(stats.winRate)+'%'} color={stats.winRate>=50?T.green:T.red} sub={`${stats.winners}W / ${stats.losers}L · ${stats.total-(stats.winners+stats.losers)}B`}/>
+        <KpiCard label="Max Drawdown"  value={fmt(stats.maxDD)+'%'} color={T.red} sub="From peak (cumPnL)"/>
       </div>
 
       {/* KPI Row 2 */}

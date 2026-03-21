@@ -63,6 +63,30 @@ export const fetchBinanceKeys = async (userId) => {
   return data
 }
 
+
+// ── Capital Flow (deposits & withdrawals — synced across devices) ────────────
+export const fetchCapitalFlow = async (userId) => {
+  const { data, error } = await supabase
+    .from('capital_flow')
+    .select('*')
+    .eq('user_id', userId)
+    .order('time', { ascending: true })
+  if (error) return []
+  return data
+}
+
+export const upsertCapitalFlow = async (entry, userId) => {
+  const { error } = await supabase
+    .from('capital_flow')
+    .upsert({ ...entry, user_id: userId }, { onConflict: 'id' })
+  if (error) throw error
+}
+
+export const deleteCapitalFlow = async (id) => {
+  const { error } = await supabase.from('capital_flow').delete().eq('id', id)
+  if (error) throw error
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
    SUPABASE SETUP INSTRUCTIONS
    Run these SQL commands in your Supabase SQL Editor:
@@ -94,6 +118,21 @@ export const fetchBinanceKeys = async (userId) => {
    );
    alter table api_keys enable row level security;
    create policy "Users own their keys" on api_keys
+     for all using (auth.uid() = user_id);
+
+   -- Capital flow table (deposits & withdrawals)
+   create table capital_flow (
+     id text primary key,
+     user_id uuid references auth.users not null,
+     type text not null,
+     amount numeric not null,
+     time bigint not null,
+     date text,
+     note text,
+     created_at timestamptz default now()
+   );
+   alter table capital_flow enable row level security;
+   create policy "Users own their flow" on capital_flow
      for all using (auth.uid() = user_id);
 
    Then go to Authentication → Settings → Site URL → set to your Netlify/Vercel URL

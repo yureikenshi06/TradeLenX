@@ -12,6 +12,28 @@
     html, body, #root { height: 100%; }
     body { background: #07090d; color: #e2e8f0; font-family: 'Inter', -apple-system, sans-serif; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
+
+    /* Global animations */
+    @keyframes fadeInUp   { from { opacity:0; transform:translateY(10px) } to { opacity:1; transform:translateY(0) } }
+    @keyframes fadeIn     { from { opacity:0 } to { opacity:1 } }
+    @keyframes slideLeft  { from { opacity:0; transform:translateX(16px) } to { opacity:1; transform:translateX(0) } }
+    @keyframes pulse      { 0%,100% { opacity:1 } 50% { opacity:0.55 } }
+    @keyframes shimmer    { 0% { background-position:-200% 0 } 100% { background-position:200% 0 } }
+    @keyframes scaleIn    { from { opacity:0; transform:scale(0.96) } to { opacity:1; transform:scale(1) } }
+
+    .page-enter { animation: fadeInUp 0.25s ease both; }
+    .card-enter { animation: scaleIn  0.2s ease both; }
+
+    /* Chart bar hover pulse */
+    .recharts-bar-rectangle:hover { filter: brightness(1.18); transition: filter 0.12s; }
+    /* Recharts area smooth */
+    .recharts-area-area { transition: d 0.5s ease; }
+
+    /* Sidebar nav item hover */
+    button:hover { opacity: 0.88; }
+
+    /* Loading dot pulse */
+    .dot-pulse { animation: pulse 1.2s ease infinite; }
     ::-webkit-scrollbar-track { background: transparent; }
     ::-webkit-scrollbar-thumb { background: #1c2333; border-radius: 2px; }
     ::-webkit-scrollbar-thumb:hover { background: #243040; }

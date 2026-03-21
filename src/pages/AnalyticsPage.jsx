@@ -1,7 +1,7 @@
+import { useState } from 'react'
 import {
-  ScatterChart, Scatter, AreaChart, Area, BarChart, Bar, LineChart, Line,
-  ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ReferenceLine, Cell, ResponsiveContainer
+  ScatterChart, Scatter, AreaChart, Area, BarChart, Bar, ComposedChart, Line,
+  XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, Cell, ResponsiveContainer, Legend
 } from 'recharts'
 import { THEME as T, colorPnL } from '../lib/theme'
 import { fmt } from '../lib/data'
@@ -10,14 +10,8 @@ import { Card, SectionHead, ChartTooltip } from '../components/UI'
 export default function AnalyticsPage({ trades, stats }) {
   if (!trades?.length) return null
 
-  // Rolling win rate (10-trade window)
-  const rolling = trades.map((_, i) => {
-    if (i < 9) return null
-    const window = trades.slice(i-9, i+1)
-    const wr = window.filter(t=>t.pnl>0).length / 10 * 100
-    const avgPnl = window.reduce((s,t)=>s+t.pnl,0)/10
-    return { i, wr, avgPnl }
-  }).filter(Boolean)
+  // Trade-by-trade waterfall (first 80)
+  const waterfallData = trades.slice(0, 80).map((t, i) => ({ i: i+1, pnl: t.pnl, sym: t.symbol }))
 
   // PnL by leverage
   const byLev = {}
@@ -28,190 +22,197 @@ export default function AnalyticsPage({ trades, stats }) {
   })
   const levArr = Object.values(byLev).sort((a,b)=>parseInt(a.lev)-parseInt(b.lev))
 
-  // Trade size vs pnl
-  const sizeVsPnl = trades.map(t => ({ size: t.price * t.qty, pnl: t.pnl, sym: t.symbol }))
-
-  // Duration vs pnl
-  const durVsPnl = trades.filter(t => t.duration > 0).map(t => ({ dur: t.duration/60, pnl: t.pnl }))
-
-  // Consecutive pnl chart (waterfall-style)
-  const waterfallData = trades.slice(0, 60).map((t, i) => ({ i: i+1, pnl: t.pnl, sym: t.symbol }))
-
-  // Fee impact
-  let cumPnl = 0, cumPnlNoFee = 0
-  const feeImpact = trades.map(t => {
-    cumPnl += t.pnl
-    cumPnlNoFee += t.pnl + t.fee
-    return { i: 0, withFee: +cumPnl.toFixed(2), noFee: +cumPnlNoFee.toFixed(2) }
-  }).map((d, i) => ({ ...d, i }))
+  // Win rate by leverage
+  const levWR = levArr.map(l => ({ ...l, wr: +(l.wins/l.count*100).toFixed(1) }))
 
   // Risk % distribution
-  const riskBuckets = [0.5, 1, 1.5, 2, 2.5, 3].map(r => ({
-    range: r + '%',
-    count: trades.filter(t => t.riskPercent <= r && t.riskPercent > r - 0.5).length,
-    pnl: trades.filter(t => t.riskPercent <= r && t.riskPercent > r - 0.5).reduce((s,t)=>s+t.pnl,0),
+  const riskBuckets = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5].map(r => ({
+    range: r+'%',
+    count: trades.filter(t => t.riskPercent <= r && t.riskPercent > r-0.5).length,
+    pnl:   trades.filter(t => t.riskPercent <= r && t.riskPercent > r-0.5).reduce((s,t)=>s+t.pnl,0),
   }))
 
+  // PnL distribution histogram
+  const pnlVals  = trades.map(t=>t.pnl)
+  const minPnl   = Math.min(...pnlVals), maxPnl = Math.max(...pnlVals)
+  const buckets  = 20
+  const step     = (maxPnl - minPnl) / buckets || 1
+  const histogram = Array.from({length:buckets}, (_,i) => {
+    const from = minPnl + i*step
+    const count = trades.filter(t => t.pnl >= from && t.pnl < from+step).length
+    return { label:'$'+from.toFixed(0), from, count, isPos: from >= 0 }
+  })
+
+  // Hour heatmap
+  const byHour = stats.byHour || []
+
+  // Symbol-wise hourly (top 5 symbols)
+  const topSyms = (stats.symbolArr||[]).slice(0,5).map(s=>s.sym)
+  const symHourly = topSyms.map(sym => {
+    const sT = trades.filter(t=>t.symbol===sym)
+    const hours = Array.from({length:24},(_,h) => {
+      const ht = sT.filter(t=>new Date(t.time).getHours()===h)
+      return { hour:h, pnl: ht.reduce((s,t)=>s+t.pnl,0), count:ht.length }
+    })
+    return { sym: sym.replace('USDT',''), hours }
+  })
+
+  // Consecutive wins/losses streaks chart
+  let streak = 0, streaks = []
+  trades.forEach((t,i) => {
+    if (t.pnl > 0) { streak = streak >= 0 ? streak+1 : 1 }
+    else            { streak = streak <= 0 ? streak-1 : -1 }
+    streaks.push({ i, streak, sym: t.symbol })
+  })
+
   return (
-    <div style={{ padding: '28px 32px' }}>
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ fontSize: 9, color: T.accent, letterSpacing: 3, textTransform: 'uppercase', marginBottom: 6 }}>Deep Dive</div>
-        <div style={{ fontSize: 30, fontWeight: 800, fontFamily: T.fontDisplay }}>Advanced Analytics</div>
+    <div className="page-enter" style={{ padding:'24px 28px',fontFamily:'var(--font-sans, Inter, sans-serif)' }}>
+      <div style={{ marginBottom:20,paddingBottom:14,borderBottom:`1px solid ${T.border}` }}>
+        <div style={{ fontSize:11,color:T.muted,textTransform:'uppercase',letterSpacing:1.5,marginBottom:4,fontWeight:500 }}>Deep Dive</div>
+        <div style={{ fontSize:22,fontWeight:700,letterSpacing:-0.5 }}>Advanced Analytics</div>
       </div>
 
-      {/* Row 1: Rolling WR + Waterfall */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      {/* Row 1: Waterfall + PnL Distribution */}
+      <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12 }}>
         <Card>
-          <SectionHead title="Rolling Win Rate (10-trade)" sub="Consistency Trend" />
-          <ResponsiveContainer width="100%" height={220}>
-            <ComposedChart data={rolling}>
-              <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-              <XAxis dataKey="i" tick={{ fill: T.muted, fontSize: 10 }} />
-              <YAxis yAxisId="l" tick={{ fill: T.muted, fontSize: 10 }} tickFormatter={v => v+'%'} domain={[0,100]} />
-              <YAxis yAxisId="r" orientation="right" tick={{ fill: T.muted, fontSize: 10 }} tickFormatter={v => '$'+fmt(v,0)} />
-              <ReferenceLine yAxisId="l" y={50} stroke={T.muted} strokeDasharray="4 4" />
-              <Tooltip content={<ChartTooltip formatter={(v, n) => n === 'wr' ? fmt(v)+'%' : '$'+fmt(v)} />} />
-              <Area yAxisId="l" type="monotone" dataKey="wr" stroke={T.blue} fill={T.blueDim} strokeWidth={2} dot={false} name="Win Rate" />
-              <Line yAxisId="r" type="monotone" dataKey="avgPnl" stroke={T.accent} strokeWidth={1.5} dot={false} name="Avg PnL" />
-            </ComposedChart>
+          <SectionHead title="Trade P&L Waterfall" sub="Each trade result"/>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={waterfallData} barSize={Math.max(3,Math.min(14,600/waterfallData.length))} margin={{left:4,right:4,top:4,bottom:4}}>
+              <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false}/>
+              <XAxis dataKey="i" tick={{fill:T.muted,fontSize:9}} tickLine={false} axisLine={{stroke:T.border}}/>
+              <YAxis tick={{fill:T.muted,fontSize:9,fontFamily:'JetBrains Mono,monospace'}} tickLine={false} axisLine={false} tickFormatter={v=>'$'+fmt(v,0)} width={56}/>
+              <ReferenceLine y={0} stroke={T.border}/>
+              <Tooltip content={<ChartTooltip formatter={v=>'$'+fmt(v)}/>}/>
+              <Bar dataKey="pnl" radius={[2,2,0,0]} name="P&L">
+                {waterfallData.map((d,i)=><Cell key={i} fill={d.pnl>=0?T.green:T.red} opacity={0.85}/>)}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card>
-          <SectionHead title="Trade-by-Trade P&L" sub="First 60 Trades" />
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={waterfallData} barSize={10}>
-              <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-              <XAxis dataKey="i" tick={{ fill: T.muted, fontSize: 10 }} />
-              <YAxis tick={{ fill: T.muted, fontSize: 10 }} tickFormatter={v => '$'+fmt(v,0)} />
-              <ReferenceLine y={0} stroke={T.muted} strokeDasharray="3 3" />
-              <Tooltip content={<ChartTooltip formatter={v => '$'+fmt(v)} />} />
-              <Bar dataKey="pnl" name="P&L" radius={[2,2,0,0]}>
-                {waterfallData.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? T.green : T.red} opacity={0.85} />)}
+          <SectionHead title="P&L Distribution" sub="Trade outcome histogram"/>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={histogram} barSize={16} margin={{left:4,right:4,top:4,bottom:4}}>
+              <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false}/>
+              <XAxis dataKey="label" tick={{fill:T.muted,fontSize:9}} tickLine={false} axisLine={{stroke:T.border}} interval={4}/>
+              <YAxis tick={{fill:T.muted,fontSize:9}} tickLine={false} axisLine={false} width={32}/>
+              <ReferenceLine x={0} stroke={T.muted} strokeDasharray="3 3"/>
+              <Tooltip content={<ChartTooltip formatter={(v,n)=>[v+' trades','']}/>}/>
+              <Bar dataKey="count" radius={[2,2,0,0]}>
+                {histogram.map((d,i)=><Cell key={i} fill={d.isPos?T.green:T.red}/>)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
       </div>
 
-      {/* Row 2: Fee Impact + Risk Buckets */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      {/* Row 2: PnL by Leverage + Win Rate by Leverage */}
+      <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12 }}>
         <Card>
-          <SectionHead title="Fee Impact on P&L" sub="True Cost of Trading" />
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={feeImpact}>
-              <defs>
-                <linearGradient id="noFeeGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={T.green} stopOpacity={0.2} />
-                  <stop offset="100%" stopColor={T.green} stopOpacity={0} />
-                </linearGradient>
-                <linearGradient id="feeGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor={T.accent} stopOpacity={0.2} />
-                  <stop offset="100%" stopColor={T.accent} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-              <XAxis dataKey="i" hide />
-              <YAxis tick={{ fill: T.muted, fontSize: 10 }} tickFormatter={v => '$'+fmt(v,0)} />
-              <ReferenceLine y={0} stroke={T.muted} strokeDasharray="3 3" />
-              <Tooltip content={<ChartTooltip formatter={v => '$'+fmt(v)} />} />
-              <Area type="monotone" dataKey="noFee" stroke={T.green} fill="url(#noFeeGrad)" strokeWidth={2} dot={false} name="Gross P&L" />
-              <Area type="monotone" dataKey="withFee" stroke={T.accent} fill="url(#feeGrad)" strokeWidth={2} dot={false} name="Net P&L" />
-              <Legend wrapperStyle={{ fontSize: 11, fontFamily: T.fontMono, color: T.muted }} />
-            </AreaChart>
+          <SectionHead title="P&L by Leverage" sub="Risk vs reward by leverage used"/>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={levArr} barSize={28} margin={{left:4,right:4,top:4,bottom:4}}>
+              <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false}/>
+              <XAxis dataKey="lev" tick={{fill:T.muted,fontSize:11}} tickLine={false} axisLine={{stroke:T.border}}/>
+              <YAxis tick={{fill:T.muted,fontSize:9,fontFamily:'JetBrains Mono,monospace'}} tickLine={false} axisLine={false} tickFormatter={v=>'$'+fmt(v,0)} width={60}/>
+              <ReferenceLine y={0} stroke={T.border}/>
+              <Tooltip content={<ChartTooltip formatter={(v,n)=>n==='pnl'?'$'+fmt(v):v+' trades'}/>}/>
+              <Bar dataKey="pnl" radius={[4,4,0,0]} name="pnl">
+                {levArr.map((d,i)=><Cell key={i} fill={d.pnl>=0?T.green:T.red}/>)}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </Card>
 
         <Card>
-          <SectionHead title="P&L by Leverage" sub="Risk vs Reward" />
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart data={levArr} barSize={28}>
-              <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-              <XAxis dataKey="lev" tick={{ fill: T.muted, fontSize: 11 }} />
-              <YAxis tick={{ fill: T.muted, fontSize: 10 }} tickFormatter={v => '$'+fmt(v,0)} />
-              <ReferenceLine y={0} stroke={T.muted} strokeDasharray="3 3" />
-              <Tooltip content={<ChartTooltip formatter={(v,n) => n==='pnl'?'$'+fmt(v):v+' trades'} />} />
-              <Bar dataKey="pnl" name="pnl" radius={[4,4,0,0]}>
-                {levArr.map((d,i) => <Cell key={i} fill={d.pnl >= 0 ? T.green : T.red} />)}
+          <SectionHead title="Win Rate by Leverage" sub="Are higher leverage trades less disciplined?"/>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={levWR} barSize={28} margin={{left:4,right:4,top:4,bottom:4}}>
+              <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false}/>
+              <XAxis dataKey="lev" tick={{fill:T.muted,fontSize:11}} tickLine={false} axisLine={{stroke:T.border}}/>
+              <YAxis tick={{fill:T.muted,fontSize:9}} tickLine={false} axisLine={false} tickFormatter={v=>v+'%'} domain={[0,100]} width={40}/>
+              <ReferenceLine y={50} stroke={T.muted} strokeDasharray="4 4"/>
+              <Tooltip content={<ChartTooltip formatter={v=>fmt(v)+'%'}/>}/>
+              <Bar dataKey="wr" radius={[4,4,0,0]} name="Win Rate">
+                {levWR.map((d,i)=><Cell key={i} fill={d.wr>=50?T.green:T.red}/>)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
         </Card>
       </div>
 
-      {/* Row 3: Scatter charts */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-        <Card>
-          <SectionHead title="Position Size vs P&L" sub="Sizing Analysis" />
-          <ResponsiveContainer width="100%" height={220}>
-            <ScatterChart>
-              <CartesianGrid strokeDasharray="3 3" stroke={T.border} />
-              <XAxis dataKey="size" name="Position Size" tick={{ fill: T.muted, fontSize: 10 }} tickFormatter={v => '$'+fmt(v,0)} />
-              <YAxis dataKey="pnl" name="P&L" tick={{ fill: T.muted, fontSize: 10 }} tickFormatter={v => '$'+fmt(v,0)} />
-              <ReferenceLine y={0} stroke={T.muted} strokeDasharray="3 3" />
-              <Tooltip content={<ChartTooltip formatter={(v,n) => '$'+fmt(v)} />} cursor={{ strokeDasharray: '3 3' }} />
-              <Scatter data={sizeVsPnl} fill={T.accent} opacity={0.6} />
-            </ScatterChart>
-          </ResponsiveContainer>
-        </Card>
+      {/* Row 3: Streak chart */}
+      <Card style={{ marginBottom:12 }}>
+        <SectionHead title="Win / Loss Streak Timeline" sub="Positive = win streak, negative = loss streak"/>
+        <ResponsiveContainer width="100%" height={180}>
+          <BarChart data={streaks} barSize={Math.max(2,Math.min(8,600/streaks.length))} margin={{left:4,right:4,top:4,bottom:4}}>
+            <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false}/>
+            <XAxis dataKey="i" hide/>
+            <YAxis tick={{fill:T.muted,fontSize:9}} tickLine={false} axisLine={false} width={30}/>
+            <ReferenceLine y={0} stroke={T.border}/>
+            <Tooltip content={<ChartTooltip formatter={(v,n)=>[Math.abs(v)+(v>=0?' win streak':' loss streak'),'']}/>}/>
+            <Bar dataKey="streak" radius={[1,1,0,0]}>
+              {streaks.map((d,i)=><Cell key={i} fill={d.streak>=0?T.green:T.red} opacity={0.85}/>)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </Card>
 
-</div>
-
-      {/* Row 4: Hour heatmap grid */}
-      <Card style={{ marginBottom: 16 }}>
-        <SectionHead title="24-Hour P&L Heatmap" sub="Best & Worst Trading Hours" />
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(24, 1fr)', gap: 5, alignItems: 'end' }}>
-          {stats.byHour.map((h, i) => {
-            const maxAbs = Math.max(...stats.byHour.map(x => Math.abs(x.pnl)))
-            const intensity = maxAbs ? Math.abs(h.pnl) / maxAbs : 0
+      {/* Row 4: 24hr heatmap */}
+      <Card style={{ marginBottom:12 }}>
+        <SectionHead title="24-Hour P&L Heatmap" sub="Best and worst hours to trade"/>
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(24,1fr)',gap:4,alignItems:'end' }}>
+          {byHour.map((h,i) => {
+            const maxAbs = Math.max(1,...byHour.map(x=>Math.abs(x.pnl)))
+            const intensity = maxAbs ? Math.abs(h.pnl)/maxAbs : 0
             return (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <div style={{ fontSize: 9, color: colorPnL(h.pnl), fontWeight: 700 }}>
-                  {h.pnl !== 0 ? (h.pnl >= 0 ? '+' : '') + (Math.abs(h.pnl) >= 100 ? fmt(h.pnl/1000,1)+'k' : fmt(h.pnl,0)) : ''}
+              <div key={i} style={{ display:'flex',flexDirection:'column',alignItems:'center',gap:3 }}>
+                <div style={{ fontSize:8,color:colorPnL(h.pnl),fontWeight:700,height:16,display:'flex',alignItems:'flex-end' }}>
+                  {h.count > 0 ? (Math.abs(h.pnl)>=100?(h.pnl>=0?'+':'−')+fmt(Math.abs(h.pnl)/1000,1)+'k':(h.pnl>=0?'+':'')+fmt(h.pnl,0)) : ''}
                 </div>
                 <div style={{
-                  width: '100%', borderRadius: '4px 4px 0 0',
-                  height: Math.max(8, intensity * 120),
-                  background: h.count === 0 ? T.surface : h.pnl >= 0
-                    ? `rgba(0,214,143,${0.2 + intensity * 0.8})`
-                    : `rgba(255,77,106,${0.2 + intensity * 0.8})`,
-                  border: `1px solid ${T.border}`,
-                  transition: 'height 0.4s',
-                }} />
-                <div style={{ fontSize: 9, color: T.muted, transform: 'rotate(-45deg)', transformOrigin: 'top', marginTop: 4 }}>{i}</div>
+                  width:'100%',borderRadius:'3px 3px 0 0',
+                  height: Math.max(6,intensity*120),
+                  background: h.count===0 ? T.surface : h.pnl>=0
+                    ? `rgba(34,197,94,${0.15+intensity*0.85})`
+                    : `rgba(239,68,68,${0.15+intensity*0.85})`,
+                  border:`1px solid ${T.border}`,
+                  transition:'height 0.4s ease',
+                }}/>
+                <div style={{ fontSize:8,color:T.muted,transform:'rotate(-45deg)',transformOrigin:'center',marginTop:6 }}>{i}</div>
               </div>
             )
           })}
         </div>
-        <div style={{ fontSize: 10, color: T.muted, marginTop: 20, textAlign: 'center' }}>Hour of day (UTC)</div>
+        <div style={{ fontSize:10,color:T.muted,textAlign:'center',marginTop:20 }}>Hour of day (local time)</div>
       </Card>
 
-      {/* Risk breakdown table */}
+      {/* Row 5: Risk breakdown */}
       <Card>
-        <SectionHead title="Risk % Breakdown" sub="Risk per Trade Analysis" />
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+        <SectionHead title="Risk % Breakdown" sub="Performance by risk per trade"/>
+        <table style={{ width:'100%',borderCollapse:'collapse',fontSize:12 }}>
           <thead>
-            <tr style={{ borderBottom: `1px solid ${T.border}` }}>
-              {['Risk Range','Trades','Total P&L','Avg P&L','Outcome'].map(h => (
-                <th key={h} style={{ padding: '8px 14px', textAlign: 'left', fontSize: 9, color: T.muted, letterSpacing: 1.5, textTransform: 'uppercase' }}>{h}</th>
+            <tr style={{ borderBottom:`1px solid ${T.border}` }}>
+              {['Risk Range','Trades','Total P&L','Avg P&L / Trade','Win Rate'].map(h=>(
+                <th key={h} style={{ padding:'8px 12px',textAlign:'left',fontSize:9,color:T.muted,letterSpacing:1.2,textTransform:'uppercase' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {riskBuckets.filter(r=>r.count>0).map((r, i) => (
-              <tr key={i} style={{ borderBottom: `1px solid ${T.border}` }}>
-                <td style={{ padding: '10px 14px', fontWeight: 600 }}>{r.range}</td>
-                <td style={{ padding: '10px 14px', color: T.textMid }}>{r.count}</td>
-                <td style={{ padding: '10px 14px', fontWeight: 700, color: colorPnL(r.pnl) }}>{r.pnl >= 0 ? '+' : ''}{fmt(r.pnl)}</td>
-                <td style={{ padding: '10px 14px', color: colorPnL(r.pnl/r.count) }}>{r.pnl >= 0 ? '+' : ''}{fmt(r.pnl/r.count)}</td>
-                <td style={{ padding: '10px 14px' }}>
-                  <div style={{
-                    width: Math.min(120, Math.abs(r.pnl)/100), height: 6, borderRadius: 3,
-                    background: colorPnL(r.pnl), opacity: 0.8,
-                  }} />
-                </td>
-              </tr>
-            ))}
+            {riskBuckets.filter(r=>r.count>0).map((r,i)=>{
+              const rTrades = trades.filter(t => t.riskPercent <= parseFloat(r.range) && t.riskPercent > parseFloat(r.range)-0.5)
+              const rWins   = rTrades.filter(t=>t.pnl>0).length
+              return (
+                <tr key={i} style={{ borderBottom:`1px solid ${T.border}`,background:i%2===0?'transparent':T.surface+'44' }}>
+                  <td style={{ padding:'9px 12px',fontWeight:600,color:T.accent }}>{r.range}</td>
+                  <td style={{ padding:'9px 12px',color:T.textMid }}>{r.count}</td>
+                  <td style={{ padding:'9px 12px',fontWeight:700,color:colorPnL(r.pnl),fontFamily:'JetBrains Mono,monospace' }}>{r.pnl>=0?'+$':'-$'}{fmt(Math.abs(r.pnl))}</td>
+                  <td style={{ padding:'9px 12px',color:colorPnL(r.pnl/r.count),fontFamily:'JetBrains Mono,monospace' }}>{r.pnl/r.count>=0?'+$':'-$'}{fmt(Math.abs(r.pnl/r.count))}</td>
+                  <td style={{ padding:'9px 12px',color:rTrades.length&&rWins/rTrades.length>=0.5?T.green:T.red }}>{rTrades.length?fmt(rWins/rTrades.length*100,1)+'%':'—'}</td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </Card>

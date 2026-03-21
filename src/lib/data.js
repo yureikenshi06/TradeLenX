@@ -58,35 +58,38 @@ export function computeStats(trades, dateRange) {
 
   const winners      = filtered.filter(t => t.pnl > 0)
   const losers       = filtered.filter(t => t.pnl < 0)
+  // Win rate: winners / (winners + losers) — excludes breakeven trades
+  const decidedTrades = winners.length + losers.length
 
-  // FIXED PnL calculation:
-  // grossPnL  = sum of all pnl fields (raw realized pnl from Binance)
-  // totalFees = sum of all fee fields
-  // netPnL    = grossPnL - totalFees  ← this is the true net
+  // PnL: gross = sum of realizedPnl; net = gross - fees
   const grossPnL     = filtered.reduce((s,t) => s + t.pnl, 0)
   const totalFees    = filtered.reduce((s,t) => s + t.fee, 0)
-  const netPnL       = grossPnL - totalFees   // always exactly gross - fees
+  const netPnL       = grossPnL - totalFees
 
   const grossProfit  = winners.reduce((s,t)=>s+t.pnl, 0)
   const grossLoss    = Math.abs(losers.reduce((s,t)=>s+t.pnl, 0))
   const profitFactor = grossLoss ? grossProfit/grossLoss : Infinity
   const avgWin       = winners.length ? grossProfit/winners.length : 0
   const avgLoss      = losers.length  ? grossLoss/losers.length : 0
-  const winRate      = filtered.length ? winners.length/filtered.length*100 : 0
+  // Correct win rate: % of decided trades that were winners
+  const winRate      = decidedTrades > 0 ? (winners.length/decidedTrades)*100 : 0
 
-  // Drawdown on equity curve
-  let peak = -Infinity, maxDD = 0, ddStart = 0, ddEnd = 0
-  filtered.forEach((t,i) => {
-    if (t.equity > peak) { peak = t.equity; ddStart = i }
-    const dd = peak > 0 ? (peak-t.equity)/peak*100 : 0
-    if (dd > maxDD) { maxDD = dd; ddEnd = i }
+  // Drawdown: peak-to-trough on running cumulative PnL (not equity which includes deposits)
+  // Start from 0, track high watermark of cumPnL
+  let ddPeak = 0, maxDD = 0, runCum = 0
+  filtered.forEach(t => {
+    runCum += t.pnl
+    if (runCum > ddPeak) ddPeak = runCum
+    const dd = ddPeak > 0 ? (ddPeak - runCum) / ddPeak * 100 : (ddPeak < runCum ? 0 : 0)
+    if (dd > maxDD) maxDD = dd
   })
 
-  // Drawdown series for chart
-  let ddPeak = -Infinity
+  // Drawdown series for chart - based on cumulative PnL watermark
+  let dsPeak = 0, dsRun = 0
   const drawdownSeries = filtered.map((t,i) => {
-    if (t.equity > ddPeak) ddPeak = t.equity
-    const dd = ddPeak > 0 ? -((ddPeak-t.equity)/ddPeak*100) : 0
+    dsRun += t.pnl
+    if (dsRun > dsPeak) dsPeak = dsRun
+    const dd = dsPeak > 0 ? -((dsPeak - dsRun) / dsPeak * 100) : 0
     return { i, dd: +dd.toFixed(2), date: localDateKey(t.time) }
   })
 

@@ -14,19 +14,6 @@ const DEFAULT_PREMARKET = [
   'Reviewed yesterday\'s mistakes',
 ]
 
-const DEFAULT_PRETRADE = [
-  'Setup matches my trading plan criteria',
-  'Identified entry, stop loss, and take profit',
-  'Risk per trade is within my limit (<2%)',
-  'Volume/liquidity is sufficient',
-  'Not chasing a move already in progress',
-  'No major news in next 30 minutes',
-  'Not in emotional state (revenge, FOMO, fear)',
-  'Position size calculated correctly',
-  'Checked higher timeframe trend direction',
-  'Risk/Reward is at least 1.5:1',
-]
-
 function ChecklistSection({ title, sub, items, checked, onToggle, onAdd, onDelete, color }) {
   const [newItem, setNewItem] = useState('')
   const done = items.filter(item => checked[item]).length
@@ -77,39 +64,32 @@ export default function ChecklistPage() {
   const stored = () => { try { return JSON.parse(localStorage.getItem('tl_checklist')||'{}') } catch { return {} } }
   const [state, setState] = useState(() => ({
     premarket:  stored().premarket  || [...DEFAULT_PREMARKET],
-    pretrade:   stored().pretrade   || [...DEFAULT_PRETRADE],
     pmChecked:  stored().pmChecked  || {},
-    ptChecked:  stored().ptChecked  || {},
     lastReset:  stored().lastReset  || null,
   }))
 
   const persist = (s) => { localStorage.setItem('tl_checklist', JSON.stringify(s)); setState(s) }
 
   const toggle = (type, item) => {
-    const key = type==='pm'?'pmChecked':'ptChecked'
-    persist({ ...state, [key]: { ...state[key], [item]: !state[key][item] } })
+    persist({ ...state, pmChecked: { ...state.pmChecked, [item]: !state.pmChecked[item] } })
   }
   const add = (type, item) => {
-    const key = type==='pm'?'premarket':'pretrade'
-    persist({ ...state, [key]: [...state[key], item] })
+    persist({ ...state, premarket: [...state.premarket, item] })
   }
   const del = (type, item) => {
-    const key = type==='pm'?'premarket':'pretrade'
-    const cKey = type==='pm'?'pmChecked':'ptChecked'
-    const updated = { ...state, [key]: state[key].filter(i=>i!==item) }
-    delete updated[cKey][item]
+    const updated = { ...state, premarket: state.premarket.filter(i=>i!==item) }
+    delete updated.pmChecked[item]
     persist(updated)
   }
   const resetAll = () => {
-    persist({ ...state, pmChecked:{}, ptChecked:{}, lastReset: new Date().toISOString() })
+    persist({ ...state, pmChecked:{}, lastReset: new Date().toISOString() })
   }
   const resetToDefaults = () => {
-    persist({ ...state, premarket:[...DEFAULT_PREMARKET], pretrade:[...DEFAULT_PRETRADE], pmChecked:{}, ptChecked:{} })
+    persist({ ...state, premarket:[...DEFAULT_PREMARKET], pmChecked:{} })
   }
 
   const pmDone = state.premarket.filter(i=>state.pmChecked[i]).length
-  const ptDone = state.pretrade.filter(i=>state.ptChecked[i]).length
-  const allDone = pmDone===state.premarket.length && ptDone===state.pretrade.length
+  const allDone = pmDone===state.premarket.length && state.premarket.length>0
 
   return (
     <div style={{ padding:'24px 28px',fontFamily:T.fontSans }}>
@@ -143,18 +123,17 @@ export default function ChecklistPage() {
         <div style={{ background:T.surface,border:`1px solid ${T.border}`,borderRadius:10,padding:'12px 16px',marginBottom:16 }}>
           <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8 }}>
             <span style={{ fontSize:12,color:T.textMid,fontWeight:500 }}>Overall Completion</span>
-            <span style={{ fontSize:12,fontFamily:T.fontMono,color:T.accent }}>{pmDone+ptDone}/{state.premarket.length+state.pretrade.length}</span>
+            <span style={{ fontSize:12,fontFamily:T.fontMono,color:T.accent }}>{pmDone}/{state.premarket.length}</span>
           </div>
           <div style={{ height:6,background:T.card,borderRadius:3,overflow:'hidden' }}>
-            <div style={{ width:((pmDone+ptDone)/(state.premarket.length+state.pretrade.length)*100||0)+'%',height:'100%',background:T.accent,borderRadius:3,transition:'width 0.3s' }}/>
+            <div style={{ width:(state.premarket.length?pmDone/state.premarket.length*100:0)+'%',height:'100%',background:T.accent,borderRadius:3,transition:'width 0.3s' }}/>
           </div>
         </div>
       )}
 
-      <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16 }}>
-        <ChecklistSection
+      <ChecklistSection
           title="Pre-Market Checklist"
-          sub="Before Market Open"
+          sub="Complete before you start trading today"
           items={state.premarket}
           checked={state.pmChecked}
           onToggle={item=>toggle('pm',item)}
@@ -162,17 +141,6 @@ export default function ChecklistPage() {
           onDelete={item=>del('pm',item)}
           color={T.blue}
         />
-        <ChecklistSection
-          title="Pre-Trade Checklist"
-          sub="Before Each Trade"
-          items={state.pretrade}
-          checked={state.ptChecked}
-          onToggle={item=>toggle('pt',item)}
-          onAdd={item=>add('pt',item)}
-          onDelete={item=>del('pt',item)}
-          color={T.accent}
-        />
-      </div>
     </div>
   )
 }
