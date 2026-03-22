@@ -43,19 +43,19 @@ export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDe
   const STEPS = [
     {
       n: '01', title: 'Supabase Setup (Free)',
-      items: ['supabase.com → New Project','Run SQL from src/lib/supabase.js in SQL Editor','Authentication → Users → Add only YOUR email','Project Settings → API → copy URL + anon key'],
+      items: ['supabase.com → New Project','Run SQL from src/lib/supabase.js in SQL Editor','Authentication → Users → Add only YOUR email','Project Settings → API → copy URL + anon key → paste in .env'],
     },
     {
-      n: '02', title: 'Environment Variables',
-      items: ['Create .env file in project root','VITE_SUPABASE_URL=https://xxxx.supabase.co','VITE_SUPABASE_ANON_KEY=your_key'],
+      n: '02', title: 'Deploy to Cloudflare Pages (Free)',
+      items: ['Push code to GitHub (private repo)','dash.cloudflare.com → Workers & Pages → Create → Pages → Connect to Git','Build command: npm run build  |  Output dir: dist  |  Functions dir: functions','Add env vars: VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY → Save & Deploy'],
     },
     {
-      n: '03', title: 'Deploy to Netlify (Free)',
-      items: ['Push to GitHub (private repo)','netlify.com → New Site → connect repo','Build: npm run build  |  Publish: dist','Add env vars in Netlify dashboard → Deploy'],
+      n: '03', title: 'Add Server-Side API Keys',
+      items: ['Cloudflare Pages → your project → Settings → Environment Variables','Add GROQ_API_KEY (free at console.groq.com) for AI Analysis','Add BINANCE_API_KEY + BINANCE_API_SECRET if you want server-side Binance fallback','Redeploy after adding variables'],
     },
     {
-      n: '04', title: 'For Live Binance Data',
-      items: ['Set BINANCE_API_KEY + BINANCE_API_SECRET in Netlify env vars','Run locally with:  netlify dev  (not npm run dev)','The Netlify function at /.netlify/functions/binance signs requests with HMAC-SHA256'],
+      n: '04', title: 'Local Development',
+      items: ['Copy .dev.vars.example → .dev.vars and fill in your keys','npm run build  then  npx wrangler pages dev dist','Or just: npm run dev  (Binance connects directly from browser — no server needed)','Rename your site: Cloudflare Pages → your project → Custom Domains or Settings → Name'],
     },
   ]
 

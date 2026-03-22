@@ -1,0 +1,5 @@
+# Wrangler reads this file (not .env) when running "wrangler pages dev"
+# Copy to .dev.vars and fill in your values
+BINANCE_API_KEY=your_binance_api_key
+BINANCE_API_SECRET=your_binance_api_secret
+GROQ_API_KEY=gsk_your_groq_api_key

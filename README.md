@@ -1,195 +1,87 @@
-# ◈ TradeLens — Private Trading Journal
+# Tradelenx — Futures Trading Journal
 
-A production-grade trading journal web app with Binance API integration, detailed analytics, AI analysis, calendar P&L view, and notes/journaling — all locked to your Supabase account.
+Private futures trading journal built with React + Vite, deployed on Cloudflare Pages.
 
----
-
-## Features
-
-- **Dashboard** — 11 KPI cards, equity curve, drawdown, monthly P&L, win/loss donuts, long/short breakdown, performance radar, hour/day heatmaps, symbol table
-- **Trade Log** — Sortable/filterable table with pagination, CSV export, all trade fields
-- **Advanced Analytics** — Rolling win rate, trade waterfall, fee impact, leverage breakdown, scatter plots, 24-hour heatmap
-- **P&L Calendar** — Monthly heatmap calendar, click any day to see trades, daily streak, month summary
-- **Symbol Analysis** — Per-symbol cards with mini equity curves, deep-dive detail panel
-- **Journal / Notes** — Rich notes with mood tracking, tags, date/symbol linking — saved to Supabase or localStorage
-- **AI Verdict** — Free Claude-powered analysis with 6 quick prompts + custom queries
-- **Settings** — Binance connection, auth status, export, deploy guide
+## Stack
+- **Frontend**: React 18 + Vite + Recharts
+- **Auth + DB**: Supabase (free tier)
+- **Hosting**: Cloudflare Pages (free tier)
+- **AI**: Groq API — llama-3.3-70b (free tier)
+- **Data**: Binance Futures API (direct browser connection via WebCrypto)
 
 ---
 
-## Quick Start
+## Deploy to Cloudflare Pages
+
+### 1. Push to GitHub
+```bash
+git init
+git add .
+git commit -m "Initial Tradelenx"
+git remote add origin https://github.com/YOUR_USERNAME/tradelenx.git
+git push -u origin main
+```
+
+### 2. Connect to Cloudflare Pages
+1. Go to [dash.cloudflare.com](https://dash.cloudflare.com)
+2. Workers & Pages → Create → Pages → Connect to Git
+3. Select your repo
+4. Build settings:
+   - **Build command**: `npm run build`
+   - **Output directory**: `dist`
+   - **Functions directory**: `functions` (auto-detected)
+
+### 3. Add Environment Variables
+In Cloudflare Pages → your project → **Settings → Environment Variables**:
+
+| Variable | Value | Required |
+|---|---|---|
+| `VITE_SUPABASE_URL` | Your Supabase project URL | ✅ |
+| `VITE_SUPABASE_ANON_KEY` | Your Supabase anon key | ✅ |
+| `GROQ_API_KEY` | Free key from [console.groq.com](https://console.groq.com) | For AI |
+| `BINANCE_API_KEY` | Binance API key | Optional |
+| `BINANCE_API_SECRET` | Binance secret | Optional |
+
+> **Note**: Binance connects directly from the browser using WebCrypto HMAC signing.  
+> Your secret key never leaves your device. The server-side function is a fallback only.
+
+### 4. Supabase Setup
+Run this SQL in your Supabase project → SQL Editor:
+```sql
+-- See src/lib/supabase.js for full SQL
+```
+
+---
+
+## Local Development
 
 ```bash
-# 1. Install dependencies
+# Install
 npm install
 
-# 2. Copy env file
-cp .env.example .env
+# Option A: Simple (no server functions)
+npm run dev          # → localhost:5173
+# Binance connects directly from browser — works fine
 
-# 3. Run dev server (works without Supabase in demo mode)
-npm run dev
-```
-
-Open http://localhost:5173
-
----
-
-## Setup Authentication (Private Access)
-
-### 1. Create Supabase project
-Go to https://supabase.com → New Project (free tier is fine)
-
-### 2. Get credentials
-Dashboard → Settings → API → copy:
-- Project URL → `VITE_SUPABASE_URL`
-- anon public key → `VITE_SUPABASE_ANON_KEY`
-
-### 3. Create database tables
-Go to Dashboard → SQL Editor → run:
-
-```sql
--- Trade notes
-create table trade_notes (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid references auth.users not null,
-  trade_id text,
-  date date,
-  symbol text,
-  title text,
-  body text,
-  mood text,
-  tags text[],
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
-alter table trade_notes enable row level security;
-create policy "Users own their notes" on trade_notes
-  for all using (auth.uid() = user_id);
-
--- API keys (optional)
-create table api_keys (
-  user_id uuid primary key references auth.users,
-  api_key text,
-  label text,
-  created_at timestamptz default now()
-);
-alter table api_keys enable row level security;
-create policy "Users own their keys" on api_keys
-  for all using (auth.uid() = user_id);
-```
-
-### 4. Create your account
-Dashboard → Authentication → Users → Add user
-Enter your email and password (this is the ONLY account that can log in)
-
-### 5. Set Site URL (after deploying)
-Dashboard → Authentication → URL Configuration → Site URL → set to your deployed URL
-
----
-
-## Connect Real Binance Data
-
-Binance requires HMAC-SHA256 signing for API calls, which **must be done server-side** for security (you can't put your API secret in frontend code).
-
-### Option A: Netlify Functions (recommended)
-
-Create `netlify/functions/binance.js`:
-```javascript
-const crypto = require('crypto')
-
-exports.handler = async (event) => {
-  const { apiKey, apiSecret } = JSON.parse(event.body)
-  const timestamp = Date.now()
-  const query = `timestamp=${timestamp}&limit=1000`
-  const signature = crypto.createHmac('sha256', apiSecret).update(query).digest('hex')
-
-  const res = await fetch(
-    `https://api.binance.com/api/v3/myTrades?${query}&signature=${signature}`,
-    { headers: { 'X-MBX-APIKEY': apiKey } }
-  )
-  const data = await res.json()
-  return { statusCode: 200, body: JSON.stringify(data) }
-}
-```
-
-Then in `src/hooks/useTrades.js`, uncomment the fetch call pointing to `/.netlify/functions/binance`.
-
-### Option B: Vercel Edge Function
-Similar approach using Vercel API routes in `/api/binance.js`.
-
----
-
-## Free Hosting
-
-### Netlify (drag & drop — easiest)
-```bash
+# Option B: With Cloudflare Workers (full local simulation)
+cp .dev.vars.example .dev.vars
+# Fill in .dev.vars with your API keys
 npm run build
-# Drag the /dist folder to netlify.com/drop
-# Then add env vars in Site Settings → Environment Variables
-```
-
-### Vercel (CLI)
-```bash
-npm install -g vercel
-vercel --prod
-# Add env vars in vercel.com dashboard → Settings → Environment Variables
-```
-
-### After deploying
-1. Copy your live URL
-2. Supabase → Auth → URL Configuration → Site URL → paste URL
-3. Test login — only your Supabase account works
-
----
-
-## File Structure
-
-```
-tradelens/
-├── src/
-│   ├── App.jsx                 # Root component + routing
-│   ├── main.jsx                # React entry point
-│   ├── lib/
-│   │   ├── supabase.js         # Supabase client + DB helpers + SQL setup
-│   │   ├── data.js             # Mock generator, stats engine, formatters
-│   │   └── theme.js            # Design tokens + color helpers
-│   ├── hooks/
-│   │   ├── useAuth.jsx         # Auth context provider
-│   │   └── useTrades.js        # Trade data + Binance connection
-│   ├── components/
-│   │   ├── Layout.jsx          # Sidebar nav layout
-│   │   └── UI.jsx              # Reusable components (Card, KpiCard, Badge, etc.)
-│   └── pages/
-│       ├── LoginPage.jsx       # Auth gate
-│       ├── DashboardPage.jsx   # Main overview with all charts
-│       ├── TradesPage.jsx      # Full trade log table
-│       ├── AnalyticsPage.jsx   # Deep analytics
-│       ├── CalendarPage.jsx    # P&L calendar heatmap
-│       ├── SymbolsPage.jsx     # Per-symbol analysis
-│       ├── NotesPage.jsx       # Trading journal with DB
-│       ├── AIPage.jsx          # Claude AI analysis
-│       └── SettingsPage.jsx    # Binance + auth + export
-├── index.html
-├── vite.config.js
-├── package.json
-└── .env.example
+npx wrangler pages dev dist --port 8788  # → localhost:8788
 ```
 
 ---
 
-## Tech Stack
-
-- **React 18** + Vite — fast, lightweight frontend
-- **Recharts** — all charts and visualizations
-- **Supabase** — auth + Postgres database (free tier)
-- **Claude API** — AI analysis (free via claude.ai artifacts)
-- **Netlify / Vercel** — free hosting
+## Rename Your Site
+Cloudflare Pages → your project → **Custom Domains** → add your domain  
+Or: Settings → change project name → `tradelenx.pages.dev`
 
 ---
 
-## Security Notes
-
-- Supabase Row Level Security (RLS) ensures only your user_id can read/write data
-- API keys are never stored in code — only in environment variables
-- Binance secret key is never sent to the frontend — only processed server-side
-- The app has no public registration — only manually-created Supabase accounts can log in
+## API Functions
+| Path | Description |
+|---|---|
+| `GET /api/ai` | Debug — checks if GROQ_API_KEY is loaded |
+| `POST /api/ai` | AI analysis via Groq llama-3.3-70b |
+| `GET /api/binance?mode=ping` | Test Binance credentials |
+| `GET /api/binance?mode=futures_trades&symbol=BTCUSDT` | Fetch trades |

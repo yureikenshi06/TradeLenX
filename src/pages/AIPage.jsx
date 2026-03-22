@@ -64,7 +64,7 @@ Reference specific numbers from the data. Give an overall score /10 in the verdi
     : `Full analysis of my perpetual futures trading.\n\nStats:\n${JSON.stringify(summary,null,2)}`
 
   // Call via Netlify proxy to avoid CORS
-  const res = await fetch('/.netlify/functions/ai', {
+  const res = await fetch('/api/ai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ system, userMsg: msg }),
@@ -165,7 +165,7 @@ export default function AIPage({ trades, stats }) {
                 <div style={{ marginTop:10,paddingTop:10,borderTop:`1px solid ${T.red}33` }}>
                   <div style={{ fontSize:11,color:T.muted,marginBottom:6 }}>Debug: open this in your browser to check if the function is running:</div>
                   <code style={{ fontSize:11,color:T.accent,background:T.surface,padding:'4px 8px',borderRadius:4,display:'block' }}>
-                    http://localhost:8888/.netlify/functions/ai
+                    http://localhost:8788/api/ai
                   </code>
                 </div>
               </div>

@@ -1,9 +1,32 @@
-node_modules
-dist
-.env.local
-.env
-*.local
-.DS_Store
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
 
-# Local Netlify folder
-.netlify
+# Build
+dist/
+dist-ssr/
+*.local
+
+# Environment & secrets — NEVER commit these
+.env
+.env.local
+.env.*.local
+.dev.vars          ← Wrangler local secrets
+
+# Editor
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
