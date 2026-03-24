@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer } from 'recharts'
 import { THEME as T, colorPnL } from '../lib/theme'
 import { fmt, fmtDate, fmtTime, localDateKey } from '../lib/data'
@@ -22,7 +22,32 @@ function DayGoalsTracker({ dayTrades, dayPnL, dayFees }) {
   const [form, setForm] = useState({ ...DEFAULT_DAY_GOALS, ...goals })
   const g = { ...DEFAULT_DAY_GOALS, ...goals }
 
-  const save = () => { localStorage.setItem('tlx_day_goals', JSON.stringify(form)); setGoals(form); setEditing(false) }
+  // Sync goals from Supabase on mount
+  useEffect(() => {
+    try {
+      import('../lib/supabase').then(({ supabase }) => {
+        supabase.auth.getUser().then(({ data }) => {
+          const meta = data?.user?.user_metadata
+          if (meta?.tlx_day_goals) {
+            const remote = { ...DEFAULT_DAY_GOALS, ...meta.tlx_day_goals }
+            setGoals(remote); setForm(remote)
+            localStorage.setItem('tlx_day_goals', JSON.stringify(remote))
+          }
+        })
+      }).catch(()=>{})
+    } catch {}
+  }, [])
+
+  const save = () => {
+    localStorage.setItem('tlx_day_goals', JSON.stringify(form))
+    setGoals(form); setEditing(false)
+    // Sync to Supabase
+    try {
+      import('../lib/supabase').then(({ supabase }) => {
+        supabase.auth.updateUser({ data: { tlx_day_goals: form } }).catch(()=>{})
+      }).catch(()=>{})
+    } catch {}
+  }
 
   const dayWins   = dayTrades.filter(t=>t.pnl>0).length
   const winRate   = dayTrades.length ? dayWins/dayTrades.length*100 : 0
@@ -218,7 +243,6 @@ export default function EODPage({ trades, stats }) {
 
         {/* Right — EOD Journal */}
         <div style={{ display:'flex',flexDirection:'column',gap:12 }}>
-          <DayGoalsTracker dayTrades={dayTrades} dayPnL={dayPnL} dayFees={dayFees}/>
           <Card glow>
             <SectionHead title="End of Day Review" sub="Daily Journal"/>
 
@@ -294,6 +318,8 @@ export default function EODPage({ trades, stats }) {
               {saved ? '✓ Saved!' : 'Save Daily Review'}
             </Btn>
           </Card>
+
+          <DayGoalsTracker dayTrades={dayTrades} dayPnL={dayPnL} dayFees={dayFees}/>
 
           {/* Past entries */}
           {entries.length > 0 && (

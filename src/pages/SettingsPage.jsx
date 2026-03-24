@@ -196,32 +196,6 @@ export default function SettingsPage({ trades, stats, onConnectBinance, onLoadDe
         </div>
         <Btn variant="success" onClick={exportCSV} style={{ padding: '10px 20px' }}>↓ Export CSV ({trades.length} trades)</Btn>
       </Card>
-
-      {/* Deployment guide */}
-      <Card>
-        <SectionHead title="Deployment Guide" sub="Free Hosting in 10 min" />
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          {STEPS.map(s => (
-            <div key={s.n} style={{ display: 'flex', gap: 16 }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: 8,
-                background: T.accentDim, border: `1px solid ${T.accent}44`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontWeight: 800, color: T.accent, fontSize: 12, flexShrink: 0,
-              }}>{s.n}</div>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 13, color: T.text, marginBottom: 7 }}>{s.title}</div>
-                {s.items.map((item, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 4 }}>
-                    <span style={{ color: T.accent, fontSize: 10, flexShrink: 0, marginTop: 2 }}>›</span>
-                    <span style={{ fontSize: 12, color: T.muted, lineHeight: 1.5 }}>{item}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
     </div>
   )
 }

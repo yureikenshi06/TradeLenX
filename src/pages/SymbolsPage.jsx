@@ -260,27 +260,34 @@ export default function SymbolsPage({ trades, stats }) {
             </Card>
           </div>
 
-          {/* Best & worst trades */}
-          <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:12 }}>
-            <Card>
-              <SectionHead title="Best 3 Trades" sub=""/>
-              {sel.best3.map((t,i)=>(
-                <div key={i} style={{ display:'flex',justifyContent:'space-between',padding:'7px 10px',background:T.greenDim,borderRadius:6,marginBottom:5,border:`1px solid ${T.green}22` }}>
-                  <div style={{ fontSize:11,color:T.textMid }}>{t.side} {fmt(t.qty,4)} @ ${fmt(t.price)}</div>
-                  <div style={{ fontSize:12,fontWeight:700,color:T.green,fontFamily:'JetBrains Mono,monospace' }}>+${fmt(t.pnl)}</div>
+          {/* All trades in descending PnL order */}
+          <Card>
+            <SectionHead title={`All Trades — ${sel.sym.replace('USDT','/USDT')}`} sub={`${sel.symTrades.length} trades · sorted by P&L`}/>
+            <div style={{ display:'flex',flexDirection:'column',gap:4,maxHeight:360,overflowY:'auto' }}>
+              {[...sel.symTrades].sort((a,b)=>b.pnl-a.pnl).map((t,i)=>(
+                <div key={i} style={{ display:'grid',gridTemplateColumns:'32px 1fr auto',alignItems:'center',gap:8,padding:'7px 10px',background:t.pnl>=0?T.greenDim:T.redDim,borderRadius:6,border:`1px solid ${t.pnl>=0?T.green:T.red}22` }}>
+                  <div style={{ fontSize:10,color:T.muted,fontFamily:'JetBrains Mono,monospace',textAlign:'center' }}>#{i+1}</div>
+                  <div>
+                    <div style={{ display:'flex',gap:6,alignItems:'center',marginBottom:2 }}>
+                      <span style={{ fontSize:11,fontWeight:600,color:T.textMid }}>{t.side}</span>
+                      <span style={{ fontSize:10,color:T.muted }}>{fmt(t.qty,4)} @ ${fmt(t.price)}</span>
+                      <span style={{ fontSize:9,color:T.muted }}>{t.leverage}x</span>
+                    </div>
+                    <div style={{ fontSize:9,color:T.muted }}>
+                      {new Date(t.time).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'2-digit'})} {new Date(t.time).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})}
+                      {t.fee ? <span style={{ color:T.red }}> · fee: -${fmt(t.fee,4)}</span> : null}
+                    </div>
+                  </div>
+                  <div style={{ textAlign:'right' }}>
+                    <div style={{ fontSize:13,fontWeight:700,color:t.pnl>=0?T.green:T.red,fontFamily:'JetBrains Mono,monospace' }}>
+                      {t.pnl>=0?'+':''}{fmt(t.pnl,2)}
+                    </div>
+                    <div style={{ fontSize:9,color:T.muted }}>net: {t.pnl-(t.fee||0)>=0?'+':''}{fmt(t.pnl-(t.fee||0),2)}</div>
+                  </div>
                 </div>
               ))}
-            </Card>
-            <Card>
-              <SectionHead title="Worst 3 Trades" sub=""/>
-              {sel.worst3.map((t,i)=>(
-                <div key={i} style={{ display:'flex',justifyContent:'space-between',padding:'7px 10px',background:T.redDim,borderRadius:6,marginBottom:5,border:`1px solid ${T.red}22` }}>
-                  <div style={{ fontSize:11,color:T.textMid }}>{t.side} {fmt(t.qty,4)} @ ${fmt(t.price)}</div>
-                  <div style={{ fontSize:12,fontWeight:700,color:T.red,fontFamily:'JetBrains Mono,monospace' }}>-${fmt(Math.abs(t.pnl))}</div>
-                </div>
-              ))}
-            </Card>
-          </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>

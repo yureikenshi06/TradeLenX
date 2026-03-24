@@ -25,11 +25,12 @@ export default function AnalyticsPage({ trades, stats }) {
   // Win rate by leverage
   const levWR = levArr.map(l => ({ ...l, wr: +(l.wins/l.count*100).toFixed(1) }))
 
-  // Risk % distribution
+  // Risk % distribution — only use trades that actually have riskPercent set
+  const tradesWithRisk = trades.filter(t => t.riskPercent != null && t.riskPercent > 0)
   const riskBuckets = [0.5, 1, 1.5, 2, 2.5, 3, 4, 5].map(r => ({
     range: r+'%',
-    count: trades.filter(t => t.riskPercent <= r && t.riskPercent > r-0.5).length,
-    pnl:   trades.filter(t => t.riskPercent <= r && t.riskPercent > r-0.5).reduce((s,t)=>s+t.pnl,0),
+    count: tradesWithRisk.filter(t => t.riskPercent <= r && t.riskPercent > r-0.5).length,
+    pnl:   tradesWithRisk.filter(t => t.riskPercent <= r && t.riskPercent > r-0.5).reduce((s,t)=>s+t.pnl,0),
   }))
 
   // PnL distribution histogram
@@ -142,24 +143,7 @@ export default function AnalyticsPage({ trades, stats }) {
         </Card>
       </div>
 
-      {/* Row 3: Streak chart */}
-      <Card style={{ marginBottom:12 }}>
-        <SectionHead title="Win / Loss Streak Timeline" sub="Positive = win streak, negative = loss streak"/>
-        <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={streaks} barSize={Math.max(2,Math.min(8,600/streaks.length))} margin={{left:4,right:4,top:4,bottom:4}}>
-            <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false}/>
-            <XAxis dataKey="i" hide/>
-            <YAxis tick={{fill:T.muted,fontSize:9}} tickLine={false} axisLine={false} width={30}/>
-            <ReferenceLine y={0} stroke={T.border}/>
-            <Tooltip content={<ChartTooltip formatter={(v,n)=>[Math.abs(v)+(v>=0?' win streak':' loss streak'),'']}/>}/>
-            <Bar dataKey="streak" radius={[1,1,0,0]}>
-              {streaks.map((d,i)=><Cell key={i} fill={d.streak>=0?T.green:T.red} opacity={0.85}/>)}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      </Card>
-
-      {/* Row 4: 24hr heatmap */}
+      {/* Row 3: 24hr heatmap */}
       <Card style={{ marginBottom:12 }}>
         <SectionHead title="24-Hour P&L Heatmap" sub="Best and worst hours to trade"/>
         <div style={{ display:'grid',gridTemplateColumns:'repeat(24,1fr)',gap:4,alignItems:'end' }}>
@@ -188,9 +172,14 @@ export default function AnalyticsPage({ trades, stats }) {
         <div style={{ fontSize:10,color:T.muted,textAlign:'center',marginTop:20 }}>Hour of day (local time)</div>
       </Card>
 
-      {/* Row 5: Risk breakdown */}
+      {/* Row 4: Risk breakdown */}
       <Card>
         <SectionHead title="Risk % Breakdown" sub="Performance by risk per trade"/>
+        {tradesWithRisk.length === 0 ? (
+          <div style={{ textAlign:'center',padding:'28px 0',color:T.muted,fontSize:12 }}>
+            No risk % data found. Make sure your trades include a <span style={{ color:T.accent,fontFamily:'JetBrains Mono,monospace' }}>riskPercent</span> field.
+          </div>
+        ) : (
         <table style={{ width:'100%',borderCollapse:'collapse',fontSize:12 }}>
           <thead>
             <tr style={{ borderBottom:`1px solid ${T.border}` }}>
@@ -201,7 +190,7 @@ export default function AnalyticsPage({ trades, stats }) {
           </thead>
           <tbody>
             {riskBuckets.filter(r=>r.count>0).map((r,i)=>{
-              const rTrades = trades.filter(t => t.riskPercent <= parseFloat(r.range) && t.riskPercent > parseFloat(r.range)-0.5)
+              const rTrades = tradesWithRisk.filter(t => t.riskPercent <= parseFloat(r.range) && t.riskPercent > parseFloat(r.range)-0.5)
               const rWins   = rTrades.filter(t=>t.pnl>0).length
               return (
                 <tr key={i} style={{ borderBottom:`1px solid ${T.border}`,background:i%2===0?'transparent':T.surface+'44' }}>
@@ -215,6 +204,7 @@ export default function AnalyticsPage({ trades, stats }) {
             })}
           </tbody>
         </table>
+        )}
       </Card>
     </div>
   )

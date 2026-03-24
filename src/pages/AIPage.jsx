@@ -240,13 +240,6 @@ export default function AIPage({ trades, stats }) {
             </Card>
           )}
 
-          <Card>
-            <SectionHead title="How it works" sub="Note"/>
-            <div style={{ fontSize:11,color:T.muted,lineHeight:1.8 }}>
-              <div style={{ marginBottom:6 }}>Requires <code style={{ background:T.surface,padding:'1px 5px',borderRadius:3,color:T.accent,fontFamily:T.fontMono,fontSize:10 }}>netlify dev</code> to run locally.</div>
-              <div>For production, add <code style={{ background:T.surface,padding:'1px 5px',borderRadius:3,color:T.accent,fontFamily:T.fontMono,fontSize:10 }}>ANTHROPIC_API_KEY</code> to your Netlify environment variables.</div>
-            </div>
-          </Card>
         </div>
       </div>
     </div>

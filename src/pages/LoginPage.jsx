@@ -42,7 +42,7 @@ export default function LoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 40 }}>
           <div style={{ fontSize: 40, marginBottom: 10 }}>◈</div>
           <div style={{ fontSize: 28, fontWeight: 800, fontFamily: T.fontDisplay, color: T.accent, letterSpacing: 1 }}>
-            TRADE<span style={{ color: T.muted }}>LENS</span>
+            TRADE<span style={{ color: T.muted }}>LENX</span>
           </div>
           <div style={{ fontSize: 11, color: T.muted, marginTop: 6, letterSpacing: 2 }}>
             YOUR PRIVATE FUTURES JOURNAL
@@ -112,11 +112,7 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div style={{ marginTop: 20, padding: '14px', background: T.surface, borderRadius: 8, fontSize: 11, color: T.muted, lineHeight: 1.7 }}>
-            <strong style={{ color: T.textMid }}>Setup required:</strong> Create your account via{' '}
-            <span style={{ color: T.accent }}>Supabase Authentication</span> dashboard.
-            This app is private — only your account can access it.
-          </div>
+
         </div>
       </div>
     </div>

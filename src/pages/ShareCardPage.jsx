@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { THEME as T, colorPnL } from '../lib/theme'
-import { fmt, fmtDate } from '../lib/data'
+import { fmt, fmtDate, loadCashFlow } from '../lib/data'
 import { Card, SectionHead, Btn, Select } from '../components/UI'
 
 const CARD_THEMES = [
@@ -66,7 +66,20 @@ export default function ShareCardPage({ trades, stats }) {
   const periodLabel = PERIOD_OPTS.find(p=>p.value===period)?.label || period
   const periodPnl   = periodStats.pnl || 0
   const periodNet   = periodStats.netPnl ?? (periodPnl - (periodStats.fees||0))
-  const startEq     = stats.startEquity || 10000
+
+  // Use capital flow for return% calculation
+  const capitalFlowBase = useMemo(() => {
+    const cf = loadCashFlow()
+    if (cf && cf.length > 0) {
+      const dep = cf.filter(e=>e.type==='deposit'||e.type==='Deposit').reduce((s,e)=>s+Math.abs(+e.amount),0)
+      const wit = cf.filter(e=>e.type==='withdrawal'||e.type==='Withdrawal').reduce((s,e)=>s+Math.abs(+e.amount),0)
+      const net = dep - wit
+      if (net > 0) return net
+    }
+    return stats.startEquity || 10000
+  }, [stats.startEquity])
+
+  const startEq = capitalFlowBase
 
   const pnlDisplay = (pnl) => {
     const val  = (pnl>=0?'+$':'-$')+fmt(Math.abs(pnl),2)
@@ -169,61 +182,67 @@ export default function ShareCardPage({ trades, stats }) {
         <div style={{ fontSize:12,color:T.muted,marginTop:4 }}>Generate a shareable performance image</div>
       </div>
 
-      <div style={{ display:'grid',gridTemplateColumns:'280px 1fr',gap:20 }}>
+      <div style={{ display:'grid',gridTemplateColumns:'320px 1fr',gap:20 }}>
         {/* Controls */}
         <div style={{ display:'flex',flexDirection:'column',gap:10 }}>
+          {/* Card Type + Period */}
           <Card>
-            <SectionHead title="Card Type" sub=""/>
-            {CARD_TYPES.map(ct=>(
-              <button key={ct.id} onClick={()=>setCardType(ct.id)} style={{
-                display:'block',width:'100%',background:cardType===ct.id?T.accentDim:T.surface,
-                border:`1px solid ${cardType===ct.id?T.accent:T.border}`,
-                color:cardType===ct.id?T.accent:T.textMid,
-                borderRadius:7,padding:'8px 12px',cursor:'pointer',textAlign:'left',fontSize:12,fontWeight:cardType===ct.id?600:400,marginBottom:5,
-              }}>{ct.label}</button>
-            ))}
+            <SectionHead title="Card Type" sub="Choose format"/>
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:5,marginBottom:cardType==='period'?10:0 }}>
+              {CARD_TYPES.map(ct=>(
+                <button key={ct.id} onClick={()=>setCardType(ct.id)} style={{
+                  background:cardType===ct.id?T.accentDim:T.surface,
+                  border:`1px solid ${cardType===ct.id?T.accent:T.border}`,
+                  color:cardType===ct.id?T.accent:T.textMid,
+                  borderRadius:7,padding:'8px 10px',cursor:'pointer',textAlign:'center',fontSize:11,fontWeight:cardType===ct.id?600:400,
+                }}>{ct.label}</button>
+              ))}
+            </div>
+            {cardType==='period' && (
+              <div>
+                <div style={{ fontSize:10,color:T.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:5 }}>Period</div>
+                <Select value={period} onChange={setPeriod} options={PERIOD_OPTS} style={{ width:'100%',fontSize:12 }}/>
+                {periodStats.pnl !== 0 && (
+                  <div style={{ marginTop:6,fontSize:11,color:T.green }}>✓ {periodStats.trades} trades · {periodStats.pnl>=0?'+$':'-$'}{fmt(Math.abs(periodStats.pnl),2)}</div>
+                )}
+              </div>
+            )}
+            {cardType==='milestone' && (
+              <div style={{ marginTop:8 }}>
+                <div style={{ fontSize:10,color:T.muted,textTransform:'uppercase',letterSpacing:1,marginBottom:5 }}>Custom Message</div>
+                <input value={customMsg} onChange={e=>setCustomMsg(e.target.value)}
+                  placeholder="e.g. 100 trades milestone!"
+                  style={{ width:'100%',background:T.surface,border:`1px solid ${T.border}`,borderRadius:7,padding:'8px 11px',color:T.text,fontSize:12,outline:'none',fontFamily:'Inter,sans-serif' }}/>
+              </div>
+            )}
           </Card>
 
-          {/* Period selector — shown for period card type */}
-          {cardType==='period' && (
-            <Card>
-              <SectionHead title="Period" sub=""/>
-              <Select value={period} onChange={setPeriod} options={PERIOD_OPTS} style={{ width:'100%',fontSize:12 }}/>
-              {periodStats.pnl === 0 && (
-                <div style={{ marginTop:8,fontSize:11,color:T.muted,lineHeight:1.6 }}>
-                  No trades found for {periodLabel}. The card will show $0.00 — try selecting a period with actual trades.
-                </div>
-              )}
-              {periodStats.pnl !== 0 && (
-                <div style={{ marginTop:8,fontSize:11,color:T.green }}>
-                  ✓ {periodStats.trades} trades · {periodStats.pnl>=0?'+$':'-$'}{fmt(Math.abs(periodStats.pnl),2)}
-                </div>
-              )}
-            </Card>
-          )}
-
+          {/* Theme */}
           <Card>
-            <SectionHead title="Theme" sub=""/>
-            {CARD_THEMES.map(ct=>(
-              <button key={ct.id} onClick={()=>setThemeId(ct.id)} style={{
-                display:'flex',alignItems:'center',gap:8,width:'100%',
-                background:themeId===ct.id?ct.bg:T.surface,
-                border:`2px solid ${themeId===ct.id?ct.accent:T.border}`,
-                color:themeId===ct.id?ct.text:T.textMid,
-                borderRadius:7,padding:'7px 12px',cursor:'pointer',fontSize:12,marginBottom:5,
-              }}>
-                <div style={{ width:12,height:12,borderRadius:'50%',background:ct.accent,flexShrink:0 }}/>
-                {ct.label}
-              </button>
-            ))}
+            <SectionHead title="Theme" sub="Card color scheme"/>
+            <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:5 }}>
+              {CARD_THEMES.map(ct=>(
+                <button key={ct.id} onClick={()=>setThemeId(ct.id)} style={{
+                  display:'flex',alignItems:'center',gap:6,
+                  background:themeId===ct.id?ct.bg:T.surface,
+                  border:`2px solid ${themeId===ct.id?ct.accent:T.border}`,
+                  color:themeId===ct.id?ct.text:T.textMid,
+                  borderRadius:7,padding:'7px 10px',cursor:'pointer',fontSize:11,
+                }}>
+                  <div style={{ width:10,height:10,borderRadius:'50%',background:ct.accent,flexShrink:0 }}/>
+                  {ct.label}
+                </button>
+              ))}
+            </div>
           </Card>
 
+          {/* Display format */}
           <Card>
-            <SectionHead title="Display" sub="Value format"/>
+            <SectionHead title="Value Format" sub="How to show P&L"/>
             <div style={{ display:'flex',gap:5 }}>
-              {[{v:'value',l:'$'},{v:'pct',l:'%'},{v:'both',l:'Both'}].map(o=>(
+              {[{v:'value',l:'$ Value'},{v:'pct',l:'% Return'},{v:'both',l:'Both'}].map(o=>(
                 <button key={o.v} onClick={()=>setDispMode(o.v)} style={{
-                  flex:1,padding:'7px',borderRadius:6,cursor:'pointer',fontSize:12,fontWeight:500,
+                  flex:1,padding:'8px',borderRadius:6,cursor:'pointer',fontSize:11,fontWeight:500,
                   background:dispMode===o.v?T.accentDim:T.surface,
                   border:`1px solid ${dispMode===o.v?T.accent:T.border}`,
                   color:dispMode===o.v?T.accent:T.muted,
@@ -231,15 +250,6 @@ export default function ShareCardPage({ trades, stats }) {
               ))}
             </div>
           </Card>
-
-          {cardType==='milestone' && (
-            <Card>
-              <SectionHead title="Custom Message" sub=""/>
-              <input value={customMsg} onChange={e=>setCustomMsg(e.target.value)}
-                placeholder="e.g. 100 trades milestone!"
-                style={{ width:'100%',background:T.surface,border:`1px solid ${T.border}`,borderRadius:7,padding:'8px 11px',color:T.text,fontSize:12,outline:'none',fontFamily:'Inter,sans-serif' }}/>
-            </Card>
-          )}
 
           <Btn variant="accent" onClick={downloadCard} style={{ padding:'12px',fontSize:13,width:'100%',textAlign:'center' }}>↓ Download PNG</Btn>
         </div>

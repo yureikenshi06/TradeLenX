@@ -6,12 +6,13 @@ export function Card({ children, style, onClick, glow }) {
   return (
     <div onClick={onClick} style={{
       background: T.card, border: `1px solid ${glow ? T.accentGlow : T.border}`,
-      borderRadius: 10, padding: '20px',
+      borderRadius: 12, padding: '20px',
       position: 'relative', overflow: 'hidden',
-      transition: 'border-color 0.15s',
+      transition: 'border-color 0.2s, box-shadow 0.2s',
+      boxShadow: glow ? `0 0 30px ${T.accent}0c` : 'none',
       cursor: onClick ? 'pointer' : 'default', ...style,
     }}>
-      {glow && <div style={{ position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${T.accent}55,transparent)` }} />}
+      {glow && <div style={{ position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${T.accent}66,transparent)` }} />}
       {children}
     </div>
   )
@@ -22,17 +23,18 @@ export function KpiCard({ label, value, sub, color, icon, trend }) {
   return (
     <div style={{
       background: T.card, border: `1px solid ${T.border}`,
-      borderRadius: 10, padding: '16px 18px',
-      display: 'flex', flexDirection: 'column', gap: 5,
+      borderRadius: 12, padding: '16px 18px',
+      display: 'flex', flexDirection: 'column', gap: 6,
       position: 'relative', overflow: 'hidden',
+      transition: 'border-color 0.2s',
     }}>
-      <div style={{ position:'absolute',top:0,right:0,width:64,height:64,background:`radial-gradient(circle at 100% 0%,${c}15 0%,transparent 70%)`,pointerEvents:'none' }} />
+      <div style={{ position:'absolute',top:0,right:0,width:80,height:80,background:`radial-gradient(circle at 100% 0%,${c}18 0%,transparent 70%)`,pointerEvents:'none' }} />
       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
-        <div style={{ fontSize:10,color:T.muted,textTransform:'uppercase',letterSpacing:1.2,fontWeight:500 }}>{label}</div>
+        <div style={{ fontSize:10,color:T.muted,textTransform:'uppercase',letterSpacing:1.4,fontWeight:600 }}>{label}</div>
         {icon && <div style={{ fontSize:13,opacity:0.5 }}>{icon}</div>}
       </div>
-      <div style={{ fontSize:22,fontWeight:600,color:c,letterSpacing:-0.5,lineHeight:1,fontFamily:T.fontMono }}>{value}</div>
-      {sub && <div style={{ fontSize:11,color:T.muted,fontWeight:400 }}>{sub}</div>}
+      <div style={{ fontSize:22,fontWeight:700,color:c,letterSpacing:-0.5,lineHeight:1,fontFamily:T.fontMono }}>{value}</div>
+      {sub && <div style={{ fontSize:11,color:T.muted,fontWeight:400,lineHeight:1.4 }}>{sub}</div>}
     </div>
   )
 }

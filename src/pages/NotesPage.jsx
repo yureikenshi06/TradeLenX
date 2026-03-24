@@ -9,15 +9,23 @@ const MOODS = ['🔥 Confident', '😐 Neutral', '😰 Anxious', '😤 Angry', '
 const TAGS   = ['FOMO', 'Disciplined', 'Overtraded', 'Missed Setup', 'Perfect Exec', 'Revenge Trade', 'News Trade', 'Breakout', 'Scalp', 'Swing']
 
 function NoteCard({ note, onEdit, onDelete }) {
+  const [expanded, setExpanded] = useState(false)
+  const bodyPreview = note.body && note.body.length > 120 ? note.body.slice(0, 120) + '…' : note.body
+
   return (
-    <div style={{
-      background: T.card, border: `1px solid ${T.border}`,
-      borderLeft: `3px solid ${T.accent}`,
-      borderRadius: 12, padding: '16px 18px',
-      transition: 'border-color 0.2s',
-    }}>
+    <div
+      onClick={() => setExpanded(e => !e)}
+      style={{
+        background: T.card, border: `1px solid ${expanded ? T.accent+'88' : T.border}`,
+        borderLeft: `3px solid ${T.accent}`,
+        borderRadius: 12, padding: '16px 18px',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+        cursor: 'pointer',
+        boxShadow: expanded ? `0 0 20px ${T.accent}18` : 'none',
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 700, fontSize: 14, color: T.text, fontFamily: T.fontDisplay, marginBottom: 4 }}>{note.title || 'Untitled'}</div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {note.date && <Badge text={note.date} color={T.textMid} />}
@@ -25,15 +33,25 @@ function NoteCard({ note, onEdit, onDelete }) {
             {note.mood && <span style={{ fontSize: 11 }}>{note.mood}</span>}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0, marginLeft: 10 }} onClick={e => e.stopPropagation()}>
           <Btn onClick={() => onEdit(note)} style={{ padding: '4px 10px', fontSize: 11 }}>✏ Edit</Btn>
           <Btn onClick={() => onDelete(note.id)} variant="danger" style={{ padding: '4px 10px', fontSize: 11 }}>✕</Btn>
         </div>
       </div>
 
-      <div style={{ color: T.textMid, fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: note.tags?.length ? 10 : 0 }}>
-        {note.body}
-      </div>
+      {/* Body — show preview or full */}
+      {!expanded ? (
+        <div style={{ color: T.muted, fontSize: 12, lineHeight: 1.7, whiteSpace: 'pre-wrap', marginBottom: 4 }}>
+          {bodyPreview || <span style={{ fontStyle: 'italic' }}>No content</span>}
+          {note.body && note.body.length > 120 && (
+            <span style={{ color: T.accent, marginLeft: 6, fontSize: 11 }}>Read more ↓</span>
+          )}
+        </div>
+      ) : (
+        <div style={{ color: T.textMid, fontSize: 12, lineHeight: 1.8, whiteSpace: 'pre-wrap', marginBottom: note.tags?.length ? 10 : 0 }}>
+          {note.body || <span style={{ fontStyle: 'italic', color: T.muted }}>No content.</span>}
+        </div>
+      )}
 
       {note.tags?.length > 0 && (
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
@@ -41,8 +59,11 @@ function NoteCard({ note, onEdit, onDelete }) {
         </div>
       )}
 
-      <div style={{ marginTop: 10, fontSize: 10, color: T.muted }}>
-        {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+      <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontSize: 10, color: T.muted }}>
+          {note.created_at ? new Date(note.created_at).toLocaleString() : ''}
+        </span>
+        <span style={{ fontSize: 10, color: T.accent }}>{expanded ? '▲ Collapse' : '▼ Read'}</span>
       </div>
     </div>
   )

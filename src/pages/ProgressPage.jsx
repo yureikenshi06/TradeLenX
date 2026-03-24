@@ -1,10 +1,10 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip,
   ReferenceLine, ResponsiveContainer, ComposedChart, Line, Legend
 } from 'recharts'
 import { THEME as T, colorPnL } from '../lib/theme'
-import { fmt, fmtPct } from '../lib/data'
+import { fmt, fmtPct, loadCashFlow } from '../lib/data'
 import { Card, SectionHead, KpiCard, ProgressBar, ChartTooltip } from '../components/UI'
 
 const DEFAULT_GOALS = {
@@ -44,10 +44,34 @@ export default function ProgressPage({ trades, stats }) {
   const [form,    setForm]    = useState({ ...DEFAULT_GOALS, ...goals })
   const g = goals
 
+  // Sync goals across devices via Supabase user_settings (graceful fallback to localStorage)
+  useEffect(() => {
+    // On mount, try to pull latest goals from Supabase user metadata
+    try {
+      import('../lib/supabase').then(({ supabase }) => {
+        supabase.auth.getUser().then(({ data }) => {
+          const meta = data?.user?.user_metadata
+          if (meta?.tlx_goals) {
+            const remote = { ...DEFAULT_GOALS, ...meta.tlx_goals }
+            setGoals(remote)
+            setForm(remote)
+            localStorage.setItem('tlx_goals', JSON.stringify(remote))
+          }
+        })
+      }).catch(()=>{})
+    } catch {}
+  }, [])
+
   const saveGoals = () => {
     const saved = { ...DEFAULT_GOALS, ...form }
     localStorage.setItem('tlx_goals', JSON.stringify(saved))
     setGoals(saved); setEditing(false)
+    // Sync to Supabase user metadata so all devices get it
+    try {
+      import('../lib/supabase').then(({ supabase }) => {
+        supabase.auth.updateUser({ data: { tlx_goals: saved } }).catch(()=>{})
+      }).catch(()=>{})
+    } catch {}
   }
 
   // ── Current month stats — pull directly from stats.monthlyArr ──────────────
@@ -94,11 +118,29 @@ export default function ProgressPage({ trades, stats }) {
   )
   const scoreColor = score>=75?T.green:score>=50?T.accent:T.red
 
-  // ── Total return: netPnL / startEquity ──────────────────────────────────────
+  // ── Total return: based on capital inflow from Wallet > Capital Flow ──────
   const totalReturn = useMemo(() => {
+    const cashFlow = loadCashFlow()
+    if (cashFlow && cashFlow.length > 0) {
+      // Net invested = sum of deposits - sum of withdrawals
+      const totalDeposited  = cashFlow.filter(e=>e.type==='deposit'  || e.type==='Deposit').reduce((s,e)=>s+Math.abs(+e.amount),0)
+      const totalWithdrawn  = cashFlow.filter(e=>e.type==='withdrawal'|| e.type==='Withdrawal').reduce((s,e)=>s+Math.abs(+e.amount),0)
+      const netInvested = totalDeposited - totalWithdrawn
+      if (netInvested > 0) return (stats.netPnL / netInvested) * 100
+    }
+    // Fallback to startEquity if no capital flow recorded
     if (!stats.startEquity || stats.startEquity <= 0) return 0
     return (stats.netPnL / stats.startEquity) * 100
   }, [stats.netPnL, stats.startEquity])
+
+  // Capital flow summary for display
+  const capitalFlowSummary = useMemo(() => {
+    const cashFlow = loadCashFlow()
+    if (!cashFlow?.length) return null
+    const deposited = cashFlow.filter(e=>e.type==='deposit'||e.type==='Deposit').reduce((s,e)=>s+Math.abs(+e.amount),0)
+    const withdrawn = cashFlow.filter(e=>e.type==='withdrawal'||e.type==='Withdrawal').reduce((s,e)=>s+Math.abs(+e.amount),0)
+    return { deposited, withdrawn, net: deposited - withdrawn }
+  }, [])
 
   if (!trades?.length) return <div style={{ padding:32,color:T.muted }}>No trade data.</div>
 
@@ -253,7 +295,7 @@ export default function ProgressPage({ trades, stats }) {
 
       {/* Bottom KPIs */}
       <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10 }}>
-        <KpiCard label="Total Return"      value={(totalReturn>=0?'+':'')+fmt(totalReturn,2)+'%'} color={colorPnL(totalReturn)} sub={`Net $${fmt(Math.abs(stats.netPnL||0),2)} / Start $${fmt(stats.startEquity||0,0)}`}/>
+        <KpiCard label="Total Return"      value={(totalReturn>=0?'+':'')+fmt(totalReturn,2)+'%'} color={colorPnL(totalReturn)} sub={capitalFlowSummary ? `Net $${fmt(Math.abs(stats.netPnL||0),2)} / Capital $${fmt(capitalFlowSummary.net,0)}` : `Net $${fmt(Math.abs(stats.netPnL||0),2)} / Start $${fmt(stats.startEquity||0,0)}`}/>
         <KpiCard label="Best Month"        value={(()=>{const v=Math.max(...monthlyChartData.map(m=>m.pnl));return (v>=0?'+$':'-$')+fmt(Math.abs(v),2)})()}  color={T.green}  sub={monthlyChartData.sort((a,b)=>b.pnl-a.pnl)[0]?.label||'—'}/>
         <KpiCard label="Worst Month"       value={(()=>{const v=Math.min(...monthlyChartData.map(m=>m.pnl));return (v>=0?'+$':'-$')+fmt(Math.abs(v),2)})()}  color={T.red}    sub={monthlyChartData.sort((a,b)=>a.pnl-b.pnl)[0]?.label||'—'}/>
         <KpiCard label="Green Months"      value={`${monthlyChartData.filter(m=>m.pnl>0).length} / ${monthlyChartData.length}`} color={T.blue} sub="Profitable months"/>

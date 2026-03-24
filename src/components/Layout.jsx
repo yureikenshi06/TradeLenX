@@ -52,9 +52,9 @@ export default function Layout({ children, activePage, onPageChange, connected, 
         {/* Nav */}
         <nav style={{ flex:1,padding:'10px 8px',display:'flex',flexDirection:'column',gap:0,overflowY:'auto' }}>
           {groups.map(group=>(
-            <div key={group.key} style={{ marginBottom:4 }}>
+            <div key={group.key} style={{ marginBottom:6 }}>
               {!collapsed && (
-                <div style={{ fontSize:9,color:T.muted,letterSpacing:1.8,fontWeight:600,padding:'10px 8px 4px',textTransform:'uppercase' }}>
+                <div style={{ fontSize:9,color:T.muted+'88',letterSpacing:2,fontWeight:700,padding:'10px 10px 5px',textTransform:'uppercase' }}>
                   {group.label}
                 </div>
               )}
@@ -63,19 +63,22 @@ export default function Layout({ children, activePage, onPageChange, connected, 
                 return (
                   <button key={item.id} onClick={()=>onPageChange(item.id)} title={collapsed?item.label:''} style={{
                     display:'flex',alignItems:'center',gap:9,
-                    padding:collapsed?'8px':'8px 10px',
-                    borderRadius:7,cursor:'pointer',
+                    padding:collapsed?'9px 0':'8px 12px',
+                    borderRadius:8,cursor:'pointer',
                     fontFamily:T.fontSans,fontSize:12,fontWeight:active?600:400,
                     background:active?T.accentDim:'transparent',
-                    color:active?T.accent:T.muted,
-                    border:active?`1px solid ${T.accent}30`:'1px solid transparent',
+                    color:active?T.accent:T.textMid,
+                    border:active?`1px solid ${T.accent}44`:'1px solid transparent',
                     transition:'all 0.12s',width:'100%',
                     justifyContent:collapsed?'center':'flex-start',
-                    marginBottom:1,
+                    marginBottom:2,
+                    letterSpacing:active?0:-0.1,
                   }}>
-                    <span style={{ fontSize:13,flexShrink:0,opacity:active?1:0.7 }}>{item.icon}</span>
-                    {!collapsed && <span style={{ whiteSpace:'nowrap' }}>{item.label}</span>}
-                    {!collapsed && active && <div style={{ marginLeft:'auto',width:4,height:4,borderRadius:'50%',background:T.accent }}/>}
+                    <span style={{ fontSize:14,flexShrink:0,opacity:active?1:0.6,transition:'opacity 0.12s' }}>{item.icon}</span>
+                    {!collapsed && <span style={{ whiteSpace:'nowrap',flex:1,textAlign:'left' }}>{item.label}</span>}
+                    {!collapsed && active && (
+                      <div style={{ width:5,height:5,borderRadius:'50%',background:T.accent,boxShadow:`0 0 6px ${T.accent}`,flexShrink:0 }}/>
+                    )}
                   </button>
                 )
               })}

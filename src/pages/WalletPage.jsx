@@ -25,11 +25,13 @@ function useLiveData() {
 
   useEffect(() => { refresh() }, [refresh])
 
-  // Auto-refresh every 30 seconds
+  // Auto-refresh: 7s interval when active positions exist, 30s otherwise
   useEffect(() => {
-    const t = setInterval(refresh, 30000)
+    const hasPositions = account?.positions?.length > 0
+    const interval = hasPositions ? 7000 : 30000
+    const t = setInterval(refresh, interval)
     return () => clearInterval(t)
-  }, [refresh])
+  }, [refresh, account?.positions?.length])
 
   return { account, loading, error, lastRefresh, refresh }
 }
