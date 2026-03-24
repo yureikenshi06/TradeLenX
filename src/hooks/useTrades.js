@@ -19,21 +19,36 @@ const FUTURES_SYMBOLS = [
 ]
 
 const STORAGE_KEY = 'tlx_binance_keys'
+const LOCAL_STORAGE_KEY = 'tlx_binance_keys_persisted'
 const INITIAL_BACKFILL_START = new Date('2026-02-25T00:00:00+05:30').getTime()
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000
 const ONE_DAY_MS = 24 * 60 * 60 * 1000
 const SIX_MONTHS_MS = 180 * 24 * 60 * 60 * 1000
 
 export const saveKeys = (k, s) => {
-  try { sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ k, s })) } catch {}
+  const payload = JSON.stringify({ k, s })
+  try { sessionStorage.setItem(STORAGE_KEY, payload) } catch {}
+  try { localStorage.setItem(LOCAL_STORAGE_KEY, payload) } catch {}
 }
 
 export const loadKeys = () => {
-  try { return JSON.parse(sessionStorage.getItem(STORAGE_KEY) || 'null') } catch { return null }
+  try {
+    const sessionKeys = sessionStorage.getItem(STORAGE_KEY)
+    if (sessionKeys) return JSON.parse(sessionKeys)
+  } catch {}
+  try {
+    const localKeys = localStorage.getItem(LOCAL_STORAGE_KEY)
+    if (localKeys) {
+      sessionStorage.setItem(STORAGE_KEY, localKeys)
+      return JSON.parse(localKeys)
+    }
+  } catch {}
+  return null
 }
 
 export const clearKeys = () => {
   try { sessionStorage.removeItem(STORAGE_KEY) } catch {}
+  try { localStorage.removeItem(LOCAL_STORAGE_KEY) } catch {}
 }
 
 async function hmacSign(secret, message) {

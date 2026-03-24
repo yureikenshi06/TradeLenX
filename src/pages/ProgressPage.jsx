@@ -52,6 +52,7 @@ export default function ProgressPage({ trades, stats }) {
   const [goalHistory, setGoalHistory] = useState(loadGoalHistory)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ ...DEFAULT_GOALS, ...goals })
+  const [capitalFlowEntries, setCapitalFlowEntries] = useState(() => loadCashFlow())
 
   const monthlyArr = stats.monthlyArr || []
   const monthOptions = monthlyArr.map((m) => ({ value: m.monthKey, label: m.monthLabel || m.label }))
@@ -65,8 +66,8 @@ export default function ProgressPage({ trades, stats }) {
 
   useEffect(() => {
     try {
-      import('../lib/supabase').then(({ supabase }) => {
-        supabase.auth.getUser().then(({ data }) => {
+      import('../lib/supabase').then(({ supabase, fetchCapitalFlow }) => {
+        supabase.auth.getUser().then(async ({ data }) => {
           const meta = data?.user?.user_metadata
           if (meta?.tlx_goals) {
             const remoteGoals = { ...DEFAULT_GOALS, ...meta.tlx_goals }
@@ -77,6 +78,16 @@ export default function ProgressPage({ trades, stats }) {
           if (meta?.tlx_goal_history) {
             setGoalHistory(meta.tlx_goal_history)
             localStorage.setItem(GOAL_HISTORY_KEY, JSON.stringify(meta.tlx_goal_history))
+          }
+
+          const uid = data?.user?.id
+          if (uid) {
+            const remoteFlow = await fetchCapitalFlow(uid).catch(() => [])
+            if (remoteFlow?.length) {
+              const normalized = remoteFlow.map((row) => ({ ...row, amount: +row.amount }))
+              setCapitalFlowEntries(normalized)
+              localStorage.setItem('tl_cashflow', JSON.stringify(normalized))
+            }
           }
         })
       }).catch(() => {})
@@ -99,7 +110,7 @@ export default function ProgressPage({ trades, stats }) {
     } catch {}
   }
 
-  const capitalMap = useMemo(() => buildCapitalByMonth(loadCashFlow(), monthlyArr.map((m) => m.monthKey)), [monthlyArr])
+  const capitalMap = useMemo(() => buildCapitalByMonth(capitalFlowEntries, monthlyArr.map((m) => m.monthKey)), [capitalFlowEntries, monthlyArr])
 
   const monthlyChartData = useMemo(() => monthlyArr.map((m) => {
     const monthGoals = goalHistory[m.monthKey] || (m.monthKey === latestMonthKey ? goals : DEFAULT_GOALS)

@@ -1,11 +1,11 @@
-import { useState, useMemo } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine, ResponsiveContainer
 } from 'recharts'
 import { THEME as T, colorPnL } from '../lib/theme'
 import { fmt } from '../lib/data'
-import { Card, SectionHead, ProgressBar, Select } from '../components/UI'
+import { Card, SectionHead, ProgressBar, Select, ChartTooltip } from '../components/UI'
 
 const PERIOD_OPTS = [
   { value: 'all', label: 'All Time' },
@@ -15,13 +15,50 @@ const PERIOD_OPTS = [
   { value: 'yearly', label: 'Yearly' },
 ]
 
+class SymbolDetailBoundary extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error) {
+    console.error('Symbols detail render failed:', error)
+  }
+
+  componentDidUpdate(prevProps) {
+    if (prevProps.resetKey !== this.props.resetKey && this.state.hasError) {
+      this.setState({ hasError: false })
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <Card>
+          <SectionHead title="Symbol Detail Unavailable" sub="This symbol's detail panel hit a render error" />
+          <div style={{ color: T.muted, fontSize: 12, lineHeight: 1.7 }}>
+            The symbol summary is still safe, but the detail panel could not render.
+            Try another symbol or reload the page. The page should no longer go fully blank.
+          </div>
+        </Card>
+      )
+    }
+    return this.props.children
+  }
+}
+
 function TradeTable({ title, trades, color }) {
+  const visibleTrades = trades.slice(0, 150)
   return (
     <Card>
-      <SectionHead title={title} sub={`${trades.length} trades`} />
-      {trades.length ? (
+      <SectionHead title={title} sub={`${trades.length} trades${trades.length > visibleTrades.length ? ` · showing first ${visibleTrades.length}` : ''}`} />
+      {visibleTrades.length ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 360, overflowY: 'auto' }}>
-          {trades.map((t, i) => (
+          {visibleTrades.map((t, i) => (
             <div key={`${t.id}-${i}`} style={{ display: 'grid', gridTemplateColumns: '36px 1fr auto', gap: 8, alignItems: 'center', padding: '8px 10px', background: `${color}12`, borderRadius: 7, border: `1px solid ${color}22` }}>
               <div style={{ fontSize: 10, color: T.muted, fontFamily: T.fontMono, textAlign: 'center' }}>#{i + 1}</div>
               <div>
@@ -118,12 +155,13 @@ export default function SymbolsPage({ trades, stats }) {
         symTrades,
         winners,
         losers,
-        curve,
+        curve: curve.filter((point) => Number.isFinite(point.cum) && Number.isFinite(point.pnl)),
         periods,
         maxDD: +maxDD.toFixed(2),
         netPnl: +(sym.pnl - sym.fees).toFixed(2),
         avgWin: winners.length ? +(winners.reduce((s, t) => s + t.pnl, 0) / winners.length).toFixed(2) : 0,
         avgLoss: losers.length ? +(Math.abs(losers.reduce((s, t) => s + t.pnl, 0) / losers.length)).toFixed(2) : 0,
+        avgPnl: symTrades.length ? +(symTrades.reduce((s, t) => s + t.pnl, 0) / symTrades.length).toFixed(2) : 0,
         maxWin: symTrades.length ? Math.max(...symTrades.map((t) => t.pnl)) : 0,
         maxLoss: symTrades.length ? Math.min(...symTrades.map((t) => t.pnl)) : 0,
         longTrades,
@@ -148,6 +186,29 @@ export default function SymbolsPage({ trades, stats }) {
   const periodChartData = sel ? (sel.periods[chartPeriod] || []) : []
   const profitableTrades = sel ? [...sel.symTrades].filter((t) => t.pnl > 0).sort((a, b) => b.pnl - a.pnl) : []
   const losingTrades = sel ? [...sel.symTrades].filter((t) => t.pnl < 0).sort((a, b) => a.pnl - b.pnl) : []
+  const safeSel = sel ? {
+    ...sel,
+    pnl: sel.pnl || 0,
+    netPnl: sel.netPnl || 0,
+    fees: sel.fees || 0,
+    wr: sel.wr || 0,
+    rr: sel.rr ?? '∞',
+    maxDD: sel.maxDD || 0,
+    avgWin: sel.avgWin || 0,
+    avgLoss: sel.avgLoss || 0,
+    avgPnl: sel.avgPnl || 0,
+    maxWin: sel.maxWin || 0,
+    maxLoss: sel.maxLoss || 0,
+    avgLev: sel.avgLev || 1,
+    longTrades: sel.longTrades || [],
+    shortTrades: sel.shortTrades || [],
+    longPnl: sel.longPnl || 0,
+    shortPnl: sel.shortPnl || 0,
+    longWR: sel.longWR || 0,
+    shortWR: sel.shortWR || 0,
+  } : null
+  const safePeriodChartData = (periodChartData || []).filter((item) => Number.isFinite(item.pnl ?? item.cum ?? 0))
+  const safeCurve = safeSel?.curve || []
 
   return (
     <div className="page-enter" style={{ padding: '24px 28px', fontFamily: 'Inter,-apple-system,sans-serif' }}>
@@ -213,30 +274,31 @@ export default function SymbolsPage({ trades, stats }) {
         ))}
       </div>
 
-      {sel && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
+      {safeSel && (
+        <SymbolDetailBoundary resetKey={safeSel.sym}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 18px', background: T.card, borderRadius: 10, border: `1px solid ${T.accentGlow}` }}>
             <div>
-              <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.3 }}>{sel.sym.replace('USDT', '')}<span style={{ color: T.muted, fontSize: 12 }}>/USDT</span></div>
-              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{sel.count} total trades · avg leverage {sel.avgLev}x</div>
+              <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.3 }}>{safeSel.sym.replace('USDT', '')}<span style={{ color: T.muted, fontSize: 12 }}>/USDT</span></div>
+              <div style={{ fontSize: 11, color: T.muted, marginTop: 2 }}>{safeSel.count} total trades · avg leverage {safeSel.avgLev}x</div>
             </div>
             <button onClick={() => setSelected(null)} style={{ background: T.surface, border: `1px solid ${T.border}`, color: T.muted, borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontSize: 12 }}>Close</button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 8 }}>
             {[
-              { l: 'Gross P&L', v: `${sel.pnl >= 0 ? '+$' : '-$'}${fmt(Math.abs(sel.pnl))}`, c: colorPnL(sel.pnl) },
-              { l: 'Net P&L', v: `${sel.netPnl >= 0 ? '+$' : '-$'}${fmt(Math.abs(sel.netPnl))}`, c: colorPnL(sel.netPnl) },
-              { l: 'Total Fees', v: `-$${fmt(sel.fees)}`, c: T.red },
-              { l: 'Win Rate', v: `${sel.wr}%`, c: parseFloat(sel.wr) >= 50 ? T.green : T.red },
-              { l: 'R:R', v: `${sel.rr}x`, c: parseFloat(sel.rr) >= 1.5 ? T.green : T.red },
-              { l: 'Max DD', v: `${fmt(sel.maxDD)}%`, c: T.red },
-              { l: 'Avg Win', v: `+$${fmt(sel.avgWin)}`, c: T.green },
-              { l: 'Avg Loss', v: `-$${fmt(sel.avgLoss)}`, c: T.red },
-              { l: 'Best Trade', v: `+$${fmt(sel.maxWin)}`, c: T.green },
-              { l: 'Worst Trade', v: `-$${fmt(Math.abs(sel.maxLoss))}`, c: T.red },
-              { l: 'Avg Lev', v: `${sel.avgLev}x`, c: sel.avgLev >= 10 ? T.red : T.accent },
-              { l: 'Avg P&L', v: `${sel.avgPnl >= 0 ? '+$' : '-$'}${fmt(Math.abs(sel.avgPnl))}`, c: colorPnL(sel.avgPnl) },
+              { l: 'Gross P&L', v: `${safeSel.pnl >= 0 ? '+$' : '-$'}${fmt(Math.abs(safeSel.pnl))}`, c: colorPnL(safeSel.pnl) },
+              { l: 'Net P&L', v: `${safeSel.netPnl >= 0 ? '+$' : '-$'}${fmt(Math.abs(safeSel.netPnl))}`, c: colorPnL(safeSel.netPnl) },
+              { l: 'Total Fees', v: `-$${fmt(safeSel.fees)}`, c: T.red },
+              { l: 'Win Rate', v: `${safeSel.wr}%`, c: parseFloat(safeSel.wr) >= 50 ? T.green : T.red },
+              { l: 'R:R', v: `${safeSel.rr}x`, c: Number.isFinite(parseFloat(safeSel.rr)) && parseFloat(safeSel.rr) >= 1.5 ? T.green : T.red },
+              { l: 'Max DD', v: `${fmt(safeSel.maxDD)}%`, c: T.red },
+              { l: 'Avg Win', v: `+$${fmt(safeSel.avgWin)}`, c: T.green },
+              { l: 'Avg Loss', v: `-$${fmt(safeSel.avgLoss)}`, c: T.red },
+              { l: 'Best Trade', v: `+$${fmt(safeSel.maxWin)}`, c: T.green },
+              { l: 'Worst Trade', v: `-$${fmt(Math.abs(safeSel.maxLoss))}`, c: T.red },
+              { l: 'Avg Lev', v: `${safeSel.avgLev}x`, c: safeSel.avgLev >= 10 ? T.red : T.accent },
+              { l: 'Avg P&L', v: `${safeSel.avgPnl >= 0 ? '+$' : '-$'}${fmt(Math.abs(safeSel.avgPnl))}`, c: colorPnL(safeSel.avgPnl) },
             ].map((r) => (
               <div key={r.l} style={{ background: T.surface, borderRadius: 8, padding: '10px 12px', border: `1px solid ${T.border}` }}>
                 <div style={{ fontSize: 9, color: T.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>{r.l}</div>
@@ -247,8 +309,8 @@ export default function SymbolsPage({ trades, stats }) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             {[
-              { side: 'LONG', trades: sel.longTrades, pnl: sel.longPnl, wr: sel.longWR, c: T.blue },
-              { side: 'SHORT', trades: sel.shortTrades, pnl: sel.shortPnl, wr: sel.shortWR, c: T.purple },
+              { side: 'LONG', trades: safeSel.longTrades, pnl: safeSel.longPnl, wr: safeSel.longWR, c: T.blue },
+              { side: 'SHORT', trades: safeSel.shortTrades, pnl: safeSel.shortPnl, wr: safeSel.shortWR, c: T.purple },
             ].map((s) => (
               <div key={s.side} style={{ background: T.surface, borderRadius: 8, padding: '12px 16px', border: `1px solid ${s.c}33` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -268,44 +330,53 @@ export default function SymbolsPage({ trades, stats }) {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Card>
               <SectionHead title="Cumulative P&L" sub="Trade-by-trade" />
-              <ResponsiveContainer width="100%" height={180}>
-                <AreaChart data={sel.curve} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
-                  <defs><linearGradient id="selG" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor={colorPnL(sel.pnl)} stopOpacity={0.3} />
-                    <stop offset="100%" stopColor={colorPnL(sel.pnl)} stopOpacity={0} />
-                  </linearGradient></defs>
-                  <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false} />
-                  <XAxis hide />
-                  <YAxis tick={{ fill: T.muted, fontSize: 9, fontFamily: 'JetBrains Mono,monospace' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${fmt(v, 0)}`} width={56} />
-                  <ReferenceLine y={0} stroke={T.border} strokeDasharray="4 4" />
-                  <Tooltip content={<ChartTooltip formatter={(v) => `$${fmt(v)}`} />} />
-                  <Area type="monotone" dataKey="cum" stroke={colorPnL(sel.pnl)} fill="url(#selG)" strokeWidth={2} dot={false} />
-                </AreaChart>
-              </ResponsiveContainer>
+              {safeCurve.length ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <AreaChart data={safeCurve} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
+                    <defs><linearGradient id={`selG-${safeSel.sym}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={colorPnL(safeSel.pnl)} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={colorPnL(safeSel.pnl)} stopOpacity={0} />
+                    </linearGradient></defs>
+                    <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false} />
+                    <XAxis hide />
+                    <YAxis tick={{ fill: T.muted, fontSize: 9, fontFamily: 'JetBrains Mono,monospace' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${fmt(v, 0)}`} width={56} />
+                    <ReferenceLine y={0} stroke={T.border} strokeDasharray="4 4" />
+                    <Tooltip content={<ChartTooltip formatter={(v) => `$${fmt(v)}`} />} />
+                    <Area type="monotone" dataKey="cum" stroke={colorPnL(safeSel.pnl)} fill={`url(#selG-${safeSel.sym})`} strokeWidth={2} dot={false} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ color: T.muted, fontSize: 12, padding: '40px 0', textAlign: 'center' }}>No curve data for this symbol.</div>
+              )}
             </Card>
 
             <Card>
               <SectionHead title="P&L by Period" sub="" action={<Select value={chartPeriod} onChange={setChartPeriod} options={PERIOD_OPTS} style={{ fontSize: 11, padding: '4px 8px' }} />} />
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={periodChartData} barSize={20} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
-                  <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false} />
-                  <XAxis dataKey="label" tick={{ fill: T.muted, fontSize: 9 }} tickLine={false} axisLine={{ stroke: T.border }} />
-                  <YAxis tick={{ fill: T.muted, fontSize: 9, fontFamily: 'JetBrains Mono,monospace' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${fmt(v, 0)}`} width={56} />
-                  <ReferenceLine y={0} stroke={T.border} />
-                  <Tooltip content={<ChartTooltip formatter={(v) => `$${fmt(v)}`} />} />
-                  <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
-                    {periodChartData.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? T.green : T.red} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+              {safePeriodChartData.length ? (
+                <ResponsiveContainer width="100%" height={180}>
+                  <BarChart data={safePeriodChartData} barSize={20} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
+                    <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false} />
+                    <XAxis dataKey="label" tick={{ fill: T.muted, fontSize: 9 }} tickLine={false} axisLine={{ stroke: T.border }} />
+                    <YAxis tick={{ fill: T.muted, fontSize: 9, fontFamily: 'JetBrains Mono,monospace' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${fmt(v, 0)}`} width={56} />
+                    <ReferenceLine y={0} stroke={T.border} />
+                    <Tooltip content={<ChartTooltip formatter={(v) => `$${fmt(v)}`} />} />
+                    <Bar dataKey="pnl" radius={[3, 3, 0, 0]}>
+                      {safePeriodChartData.map((d, i) => <Cell key={i} fill={(d.pnl || 0) >= 0 ? T.green : T.red} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ color: T.muted, fontSize: 12, padding: '40px 0', textAlign: 'center' }}>No period data for this symbol.</div>
+              )}
             </Card>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <TradeTable title={`Winning Trades — ${sel.sym.replace('USDT', '/USDT')}`} trades={profitableTrades} color={T.green} />
-            <TradeTable title={`Losing Trades — ${sel.sym.replace('USDT', '/USDT')}`} trades={losingTrades} color={T.red} />
+            <TradeTable title={`Winning Trades — ${safeSel.sym.replace('USDT', '/USDT')}`} trades={profitableTrades} color={T.green} />
+            <TradeTable title={`Losing Trades — ${safeSel.sym.replace('USDT', '/USDT')}`} trades={losingTrades} color={T.red} />
           </div>
-        </div>
+          </div>
+        </SymbolDetailBoundary>
       )}
     </div>
   )

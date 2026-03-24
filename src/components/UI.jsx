@@ -4,15 +4,16 @@ const T = THEME
 
 export function Card({ children, style, onClick, glow }) {
   return (
-    <div onClick={onClick} style={{
-      background: T.card, border: `1px solid ${glow ? T.accentGlow : T.border}`,
+    <div className="card-enter" onClick={onClick} style={{
+      background: 'linear-gradient(180deg, rgba(15,19,24,0.94) 0%, rgba(12,15,20,0.92) 100%)', border: `1px solid ${glow ? T.accentGlow : T.border}`,
       borderRadius: 12, padding: '20px',
       position: 'relative', overflow: 'hidden',
-      transition: 'border-color 0.2s, box-shadow 0.2s',
-      boxShadow: glow ? `0 0 30px ${T.accent}0c` : 'none',
+      transition: 'border-color 0.2s, box-shadow 0.2s, transform 0.2s ease',
+      boxShadow: glow ? `0 0 30px ${T.accent}0c` : '0 10px 28px rgba(0,0,0,0.18)',
       cursor: onClick ? 'pointer' : 'default', ...style,
     }}>
       {glow && <div style={{ position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${T.accent}66,transparent)` }} />}
+      <div className="glass-sheen" />
       {children}
     </div>
   )
@@ -21,14 +22,16 @@ export function Card({ children, style, onClick, glow }) {
 export function KpiCard({ label, value, sub, color, icon, trend }) {
   const c = color || T.text
   return (
-    <div style={{
-      background: T.card, border: `1px solid ${T.border}`,
+    <div className="card-enter" style={{
+      background: 'linear-gradient(180deg, rgba(15,19,24,0.94) 0%, rgba(12,15,20,0.92) 100%)', border: `1px solid ${T.border}`,
       borderRadius: 12, padding: '16px 18px',
       display: 'flex', flexDirection: 'column', gap: 6,
       position: 'relative', overflow: 'hidden',
-      transition: 'border-color 0.2s',
+      transition: 'border-color 0.2s, box-shadow 0.2s ease, transform 0.2s ease',
+      boxShadow: '0 12px 32px rgba(0,0,0,0.16)',
     }}>
       <div style={{ position:'absolute',top:0,right:0,width:80,height:80,background:`radial-gradient(circle at 100% 0%,${c}18 0%,transparent 70%)`,pointerEvents:'none' }} />
+      <div className="glass-sheen" />
       <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center' }}>
         <div style={{ fontSize:10,color:T.muted,textTransform:'uppercase',letterSpacing:1.4,fontWeight:600 }}>{label}</div>
         {icon && <div style={{ fontSize:13,opacity:0.5 }}>{icon}</div>}
