@@ -10,17 +10,25 @@ export default function AnalyticsPage({ trades, stats }) {
   if (!trades?.length) return null
 
   const waterfallData = trades.slice(0, 80).map((t, i) => ({ i: i + 1, pnl: t.pnl, sym: t.symbol }))
+  const leverageTrades = trades.filter((t) => Math.abs(t.pnl || 0) > 0.000001)
 
   const byLev = {}
-  trades.forEach((t) => {
-    const key = `${t.leverage || 1}x`
-    if (!byLev[key]) byLev[key] = { lev: key, pnl: 0, count: 0, wins: 0 }
-    byLev[key].pnl += t.pnl
+  leverageTrades.forEach((t) => {
+    const leverage = Math.max(1, Math.round(Number(t.leverage) || 1))
+    const key = `${leverage}x`
+    if (!byLev[key]) byLev[key] = { lev: key, leverage, pnl: 0, netPnl: 0, count: 0, wins: 0 }
+    byLev[key].pnl += t.pnl || 0
+    byLev[key].netPnl += (t.pnl || 0) - (t.fee || 0)
     byLev[key].count++
     if (t.pnl > 0) byLev[key].wins++
   })
-  const levArr = Object.values(byLev).sort((a, b) => parseInt(a.lev) - parseInt(b.lev))
-  const levWR = levArr.map((item) => ({ ...item, wr: +(item.wins / item.count * 100).toFixed(1) }))
+  const levArr = Object.values(byLev)
+    .sort((a, b) => a.leverage - b.leverage)
+    .map((item) => ({
+      ...item,
+      avgNetPnl: item.count ? +(item.netPnl / item.count).toFixed(2) : 0,
+      wr: item.count ? +(item.wins / item.count * 100).toFixed(1) : 0,
+    }))
 
   const pnlVals = trades.map((t) => t.pnl)
   const minPnl = Math.min(...pnlVals)
@@ -109,8 +117,8 @@ export default function AnalyticsPage({ trades, stats }) {
               <XAxis dataKey="lev" tick={{ fill: T.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: T.border }} />
               <YAxis tick={{ fill: T.muted, fontSize: 9, fontFamily: 'JetBrains Mono,monospace' }} tickLine={false} axisLine={false} tickFormatter={(v) => `$${fmt(v, 0)}`} width={60} />
               <ReferenceLine y={0} stroke={T.border} />
-              <Tooltip content={<ChartTooltip formatter={(v, n) => n === 'pnl' ? `$${fmt(v)}` : `${v} trades`} />} />
-              <Bar dataKey="pnl" radius={[4, 4, 0, 0]} name="pnl">
+              <Tooltip content={<ChartTooltip formatter={(v, n) => n === 'Net P&L' || n === 'Avg/Trade' ? `$${fmt(v)}` : `${v} trades`} />} />
+              <Bar dataKey="netPnl" radius={[4, 4, 0, 0]} name="Net P&L">
                 {levArr.map((d, i) => <Cell key={i} fill={d.pnl >= 0 ? T.green : T.red} />)}
               </Bar>
             </BarChart>
@@ -120,14 +128,14 @@ export default function AnalyticsPage({ trades, stats }) {
         <Card>
           <SectionHead title="Win Rate by Leverage" sub="Are higher leverage trades less disciplined?" />
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={levWR} barSize={28} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
+            <BarChart data={levArr} barSize={28} margin={{ left: 4, right: 4, top: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="2 4" stroke={T.border} vertical={false} />
               <XAxis dataKey="lev" tick={{ fill: T.muted, fontSize: 11 }} tickLine={false} axisLine={{ stroke: T.border }} />
               <YAxis tick={{ fill: T.muted, fontSize: 9 }} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} domain={[0, 100]} width={40} />
               <ReferenceLine y={50} stroke={T.muted} strokeDasharray="4 4" />
               <Tooltip content={<ChartTooltip formatter={(v) => `${fmt(v)}%`} />} />
               <Bar dataKey="wr" radius={[4, 4, 0, 0]} name="Win Rate">
-                {levWR.map((d, i) => <Cell key={i} fill={d.wr >= 50 ? T.green : T.red} />)}
+                {levArr.map((d, i) => <Cell key={i} fill={d.wr >= 60 ? T.green : d.wr >= 40 ? T.accent : T.red} />)}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

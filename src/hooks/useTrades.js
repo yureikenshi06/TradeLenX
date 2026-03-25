@@ -118,7 +118,7 @@ function normalizeTrade(t, symbol) {
     pnl: +parseFloat(t.realizedPnl || 0).toFixed(4),
     equity: 10000,
     time: t.time,
-    leverage: 1,
+    leverage: 0,
     riskPercent: 0,
     source: 'futures',
     orderId: String(t.orderId || ''),
@@ -153,10 +153,16 @@ function buildEquityCurve(rawTrades, startingEquity = 10000, leverageMap = {}) {
   let equity = startingEquity
   return sorted.map((trade) => {
     equity = +(equity + trade.pnl - trade.fee).toFixed(2)
+    const tradeLeverage = Number(trade.leverage || 0)
+    const fallbackLeverage = Number(leverageMap[trade.symbol] || 0)
     return {
       ...trade,
       equity,
-      leverage: leverageMap[trade.symbol] || trade.leverage || 1,
+      leverage: tradeLeverage > 1
+        ? tradeLeverage
+        : fallbackLeverage > 0
+          ? fallbackLeverage
+          : Math.max(1, tradeLeverage || 1),
     }
   })
 }

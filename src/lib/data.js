@@ -75,11 +75,34 @@ export function normalizeCashFlow(entries = []) {
     .sort((a, b) => a.time - b.time)
 }
 
-export function buildCapitalByMonth(entries = [], monthKeys = []) {
+export function monthProfitMapFromTrades(trades = []) {
+  return trades.reduce((map, trade) => {
+    const key = monthKeyFromTs(trade.time)
+    if (!map[key]) {
+      map[key] = {
+        key,
+        label: monthLabelFromKey(key),
+        grossProfit: 0,
+        fees: 0,
+        netProfit: 0,
+        trades: 0,
+      }
+    }
+    map[key].grossProfit += trade.pnl || 0
+    map[key].fees += trade.fee || 0
+    map[key].netProfit += (trade.pnl || 0) - (trade.fee || 0)
+    map[key].trades += 1
+    return map
+  }, {})
+}
+
+export function buildCapitalByMonth(entries = [], monthKeys = [], trades = []) {
   const flow = normalizeCashFlow(entries)
+  const monthlyProfit = monthProfitMapFromTrades(trades)
   const allKeys = [...new Set([
     ...flow.map((entry) => monthKeyFromTs(entry.time)),
     ...monthKeys,
+    ...Object.keys(monthlyProfit),
   ])].sort()
 
   let runningCapital = 0
@@ -90,9 +113,12 @@ export function buildCapitalByMonth(entries = [], monthKeys = []) {
     const startCapital = runningCapital
     const deposits = monthEntries.filter((entry) => entry.type === 'deposit').reduce((sum, entry) => sum + entry.amount, 0)
     const withdrawals = monthEntries.filter((entry) => entry.type === 'withdraw').reduce((sum, entry) => sum + entry.amount, 0)
+    const grossProfit = monthlyProfit[key]?.grossProfit || 0
+    const fees = monthlyProfit[key]?.fees || 0
+    const netProfit = monthlyProfit[key]?.netProfit || 0
     const netFlow = deposits - withdrawals
-    const endCapital = startCapital + netFlow
-    const averageCapital = Math.max(0, startCapital + netFlow / 2)
+    const endCapital = startCapital + deposits + netProfit - withdrawals
+    const averageCapital = Math.max(0, startCapital + (deposits + netProfit - withdrawals) / 2)
 
     map[key] = {
       key,
@@ -100,15 +126,52 @@ export function buildCapitalByMonth(entries = [], monthKeys = []) {
       startCapital: +startCapital.toFixed(2),
       deposits: +deposits.toFixed(2),
       withdrawals: +withdrawals.toFixed(2),
+      grossProfit: +grossProfit.toFixed(2),
+      fees: +fees.toFixed(2),
+      netProfit: +netProfit.toFixed(2),
       netFlow: +netFlow.toFixed(2),
       endCapital: +endCapital.toFixed(2),
       averageCapital: +averageCapital.toFixed(2),
+      trades: monthlyProfit[key]?.trades || 0,
     }
 
     runningCapital = endCapital
   })
 
   return map
+}
+
+export function buildRollingCashFlowInsights(entries = [], type = 'deposit') {
+  const flow = normalizeCashFlow(entries).filter((entry) => entry.type === type)
+  const now = Date.now()
+  const windows = {
+    week: 7,
+    month: 30,
+    quarter: 90,
+    year: 365,
+  }
+
+  const totals = Object.fromEntries(
+    Object.entries(windows).map(([label, days]) => {
+      const cutoff = now - days * 24 * 60 * 60 * 1000
+      const total = flow.filter((entry) => entry.time >= cutoff).reduce((sum, entry) => sum + entry.amount, 0)
+      return [label, +total.toFixed(2)]
+    })
+  )
+
+  const allTime = flow.reduce((sum, entry) => sum + entry.amount, 0)
+  const highest = flow.reduce((max, entry) => Math.max(max, entry.amount), 0)
+  const average = flow.length ? flow.reduce((sum, entry) => sum + entry.amount, 0) / flow.length : 0
+  const latest = flow[flow.length - 1] || null
+
+  return {
+    count: flow.length,
+    highest: +highest.toFixed(2),
+    average: +average.toFixed(2),
+    allTime: +allTime.toFixed(2),
+    latest,
+    ...totals,
+  }
 }
 
 function getTradeRiskValue(trade) {

@@ -15,11 +15,22 @@ const PERIOD_OPTIONS = [
   { value:'yearly',    label:'Yearly'    },
 ]
 
+function getWinRateColor(winRate = 0) {
+  const clamped = Math.max(0, Math.min(100, Number(winRate) || 0))
+  if (clamped <= 35) return T.red
+  if (clamped >= 65) return T.green
+  const progress = (clamped - 35) / 30
+  const r = Math.round(239 + (34 - 239) * progress)
+  const g = Math.round(68 + (197 - 68) * progress)
+  const b = Math.round(68 + (94 - 68) * progress)
+  return `rgb(${r}, ${g}, ${b})`
+}
 
 export default function DashboardPage({ trades, stats, applyDateRange, dateRange, allTrades }) {
   const [period, setPeriod]   = useState('monthly')
   const [startDate, setStart] = useState('')
   const [endDate,   setEnd]   = useState('')
+  const winRateColor = getWinRateColor(stats?.winRate)
 
   if (!trades?.length) return <div style={{ padding:32,color:T.muted }}>No trade data loaded.</div>
 
@@ -75,7 +86,7 @@ const periodData = period==='weekly'    ? stats.weeklyArr?.map(d=>({label:d.labe
         <KpiCard label="Net P&L"       value={(stats.netPnL>=0?'+$':'-$')+fmt(Math.abs(stats.netPnL||0))} color={colorPnL(stats.netPnL||0)} sub="Gross minus fees"/>
         <KpiCard label="Gross P&L"     value={(stats.grossPnL>=0?'+$':'-$')+fmt(Math.abs(stats.grossPnL||0))} color={colorPnL(stats.grossPnL||0)} sub="Before deducting fees"/>
         <KpiCard label="Total Fees"    value={'-$'+fmt(stats.totalFees)} color={T.red} sub="= Gross − Net"/>
-        <KpiCard label="Win Rate"      value={fmt(stats.winRate)+'%'} color={stats.winRate>=50?T.green:T.red} sub={`${stats.winners}W / ${stats.losers}L · ${stats.total-(stats.winners+stats.losers)}B`}/>
+        <KpiCard label="Win Rate"      value={fmt(stats.winRate)+'%'} color={winRateColor} sub={`${stats.winners}W / ${stats.losers}L · ${stats.total-(stats.winners+stats.losers)}B`}/>
         <KpiCard label="Max Drawdown"  value={fmt(stats.maxDD)+'%'} color={T.red} sub="From peak (cumPnL)"/>
       </div>
 

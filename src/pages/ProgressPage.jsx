@@ -4,7 +4,7 @@ import {
   ReferenceLine, ResponsiveContainer, ComposedChart, Line, Legend
 } from 'recharts'
 import { THEME as T, colorPnL } from '../lib/theme'
-import { fmt, buildCapitalByMonth, loadCashFlow, monthKeyFromTs, monthLabelFromKey } from '../lib/data'
+import { fmt, buildCapitalByMonth, loadCashFlow, monthKeyFromTs, monthLabelFromKey, normalizeCashFlow } from '../lib/data'
 import { Card, SectionHead, KpiCard, Select } from '../components/UI'
 
 const DEFAULT_GOALS = {
@@ -52,7 +52,7 @@ export default function ProgressPage({ trades, stats }) {
   const [goalHistory, setGoalHistory] = useState(loadGoalHistory)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState({ ...DEFAULT_GOALS, ...goals })
-  const [capitalFlowEntries, setCapitalFlowEntries] = useState(() => loadCashFlow())
+  const [capitalFlowEntries, setCapitalFlowEntries] = useState(() => normalizeCashFlow(loadCashFlow()))
 
   const monthlyArr = stats.monthlyArr || []
   const monthOptions = monthlyArr.map((m) => ({ value: m.monthKey, label: m.monthLabel || m.label }))
@@ -84,7 +84,7 @@ export default function ProgressPage({ trades, stats }) {
           if (uid) {
             const remoteFlow = await fetchCapitalFlow(uid).catch(() => [])
             if (remoteFlow?.length) {
-              const normalized = remoteFlow.map((row) => ({ ...row, amount: +row.amount }))
+              const normalized = normalizeCashFlow(remoteFlow.map((row) => ({ ...row, amount: +row.amount })))
               setCapitalFlowEntries(normalized)
               localStorage.setItem('tl_cashflow', JSON.stringify(normalized))
             }
@@ -110,12 +110,13 @@ export default function ProgressPage({ trades, stats }) {
     } catch {}
   }
 
-  const capitalMap = useMemo(() => buildCapitalByMonth(capitalFlowEntries, monthlyArr.map((m) => m.monthKey)), [capitalFlowEntries, monthlyArr])
+  const capitalMap = useMemo(() => buildCapitalByMonth(capitalFlowEntries, monthlyArr.map((m) => m.monthKey), trades), [capitalFlowEntries, monthlyArr, trades])
 
   const monthlyChartData = useMemo(() => monthlyArr.map((m) => {
     const monthGoals = goalHistory[m.monthKey] || (m.monthKey === latestMonthKey ? goals : DEFAULT_GOALS)
     const capital = capitalMap[m.monthKey] || { averageCapital: 0, deposits: 0, withdrawals: 0, endCapital: 0, startCapital: 0 }
-    const returnPct = capital.averageCapital > 0 ? (m.netPnl / capital.averageCapital) * 100 : 0
+    const capitalBase = Math.max(0, (capital.startCapital || 0) + (capital.deposits || 0))
+    const returnPct = capitalBase > 0 ? (m.netPnl / capitalBase) * 100 : 0
     return {
       ...m,
       label: m.monthLabel || m.label,
@@ -129,6 +130,7 @@ export default function ProgressPage({ trades, stats }) {
       withdrawals: capital.withdrawals,
       endCapital: capital.endCapital,
       startCapital: capital.startCapital,
+      capitalBase,
       returnPct,
       met: (m.netPnl || 0) >= monthGoals.monthlyTarget,
     }
@@ -190,8 +192,10 @@ export default function ProgressPage({ trades, stats }) {
     }
   }, [yearOptions, selectedYear])
 
+  const totalDeposits = normalizeCashFlow(capitalFlowEntries).filter((entry) => entry.type === 'deposit').reduce((sum, entry) => sum + entry.amount, 0)
   const totalCapital = capitalMap[monthlyChartData[monthlyChartData.length - 1]?.monthKey || '']?.endCapital || 0
-  const totalReturn = totalCapital > 0 ? (stats.netPnL / totalCapital) * 100 : 0
+  const totalReturnBase = totalDeposits
+  const totalReturn = totalReturnBase > 0 ? (stats.netPnL / totalReturnBase) * 100 : 0
 
   if (!trades?.length) return <div style={{ padding: 32, color: T.muted }}>No trade data.</div>
 
@@ -254,7 +258,7 @@ export default function ProgressPage({ trades, stats }) {
               { l: 'Trades', v: selectedMonth?.trades || 0, c: T.text },
               { l: 'Win Rate', v: `${fmt(selectedMonth?.wr || 0, 1)}%`, c: (selectedMonth?.wr || 0) >= 50 ? T.green : T.red },
               { l: 'Monthly Return', v: `${selectedMonth?.returnPct >= 0 ? '+' : ''}${fmt(selectedMonth?.returnPct || 0, 2)}%`, c: colorPnL(selectedMonth?.returnPct || 0) },
-              { l: 'Avg Capital', v: `$${fmt(selectedMonth?.averageCapital || 0, 0)}`, c: T.accent },
+              { l: 'Capital Base', v: `$${fmt(selectedMonth?.capitalBase || 0, 0)}`, c: T.accent },
             ].map((r) => (
               <div key={r.l} style={{ background: T.surface, borderRadius: 7, padding: '9px 11px', border: `1px solid ${T.border}` }}>
                 <div style={{ fontSize: 8, color: T.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>{r.l}</div>
@@ -337,7 +341,7 @@ export default function ProgressPage({ trades, stats }) {
       </Card>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 10 }}>
-        <KpiCard label="Total Return" value={`${totalReturn >= 0 ? '+' : ''}${fmt(totalReturn, 2)}%`} color={colorPnL(totalReturn)} sub={`Net ${stats.netPnL >= 0 ? '+$' : '-$'}${fmt(Math.abs(stats.netPnL || 0), 2)} / Capital $${fmt(totalCapital, 0)}`} />
+        <KpiCard label="Total Return" value={`${totalReturn >= 0 ? '+' : ''}${fmt(totalReturn, 2)}%`} color={colorPnL(totalReturn)} sub={`Net ${stats.netPnL >= 0 ? '+$' : '-$'}${fmt(Math.abs(stats.netPnL || 0), 2)} / Base $${fmt(totalReturnBase || totalCapital, 0)}`} />
         <KpiCard label="Best Month" value={monthlyChartData.length ? `${Math.max(...monthlyChartData.map((m) => m.netPnl)) >= 0 ? '+$' : '-$'}${fmt(Math.abs(Math.max(...monthlyChartData.map((m) => m.netPnl))), 2)}` : '$0.00'} color={T.green} sub={monthlyChartData.slice().sort((a, b) => b.netPnl - a.netPnl)[0]?.label || '—'} />
         <KpiCard label="Worst Month" value={monthlyChartData.length ? `${Math.min(...monthlyChartData.map((m) => m.netPnl)) >= 0 ? '+$' : '-$'}${fmt(Math.abs(Math.min(...monthlyChartData.map((m) => m.netPnl))), 2)}` : '$0.00'} color={T.red} sub={monthlyChartData.slice().sort((a, b) => a.netPnl - b.netPnl)[0]?.label || '—'} />
         <KpiCard label="Green Months" value={`${monthlyChartData.filter((m) => m.netPnl > 0).length} / ${monthlyChartData.length}`} color={T.blue} sub="Profitable net months" />

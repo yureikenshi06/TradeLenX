@@ -13,6 +13,7 @@ import AIPage        from './pages/AIPage'
 import SettingsPage  from './pages/SettingsPage'
 import ProgressPage  from './pages/ProgressPage'
 import EODPage       from './pages/EODPage'
+import EODInsightsPage from './pages/EODInsightsPage'
 import ChecklistPage from './pages/ChecklistPage'
 import ShareCardPage from './pages/ShareCardPage'
 import WalletPage    from './pages/WalletPage'
@@ -86,11 +87,12 @@ function AppInner() {
     charts:    <AnalyticsPage {...shared}/>,
     calendar:  <CalendarPage  {...shared}/>,
     symbols:   <SymbolsPage   {...shared}/>,
-    wallet:    <WalletPage savedKeys={savedKeys} source={source}/>,
+    wallet:    <WalletPage savedKeys={savedKeys} source={source} trades={allTrades}/>,
     notes:     <NotesPage     {...shared}/>,
     ai:        <AIPage        {...shared}/>,
     progress:  <ProgressPage  {...shared}/>,
     eod:       <EODPage       {...shared}/>,
+    eodInsights: <EODInsightsPage />,
     checklist: <ChecklistPage/>,
     share:     <ShareCardPage {...shared}/>,
     settings:  <SettingsPage
